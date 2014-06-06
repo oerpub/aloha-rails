@@ -1,2 +1,2 @@
 # Dummy
-Dummy app for testing the aloha-rails gem
+Dummy app for testing the OERPUB Aloha Rails gem

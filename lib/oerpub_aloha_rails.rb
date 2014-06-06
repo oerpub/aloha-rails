@@ -1,4 +1,4 @@
-require 'oerpub/aloha/rails/views'
+require 'oerpub/aloha/rails/view'
 
 module Oerpub
   module Aloha
