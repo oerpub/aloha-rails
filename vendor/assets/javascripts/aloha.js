@@ -56453,6 +56453,789 @@ define('paste/paste-plugin',[
 });
 
 /*
+ * Repository
+ * Copyright (c) 2010 Nicolas Karageuzian - http://nka.me
+ */
+define('draganddropfiles/dropfilesrepository',[	
+	'jquery',
+	'aloha/repository',
+	'aloha/repository',
+	'i18n!aloha/nls/i18n'],
+function($, repository, i18nCore){
+	
+	var jQuery = $,
+	    GENTICS = window.GENTICS,
+	    Aloha = window.Aloha,
+	    Uploader = {
+		_constructor: function(repositoryId, repositoryName) {
+			var uploadFolder = new this.UploadFolder({
+				id: "Uploads",
+				name: "Uploads",
+				displayName:"Uploads",
+				parentId:"/",
+				path:"Uploads",
+				objectType:'folder',
+				type:'folder',
+				repositoryId:repositoryId
+			});
+			Aloha.Log.info(Aloha,"_constructor : Initializing default uploader");
+			this._super(repositoryId, repositoryName);
+
+			this.uploadFolder = uploadFolder;
+			this.objects = [uploadFolder];
+			var that = this;
+			// upload queue FIFO
+			this.uploadQueue = {
+					queue: [], // items queued
+					push: function(obj) { // add an item
+						this.queue.push(obj);
+					},
+					pop: function(){ // grabs first item of array and remove it
+						var result = this.queue[0];
+						this.queue = this.queue.splice(1);
+						return result;
+					},
+					processQueue: function() { // Process file uploads
+						var file;
+						if (!this.processUpload) { // prevents concurrent runs of processQueue
+							this.processUpload = true;
+							// recalculate queue lenght after each upload
+							while(this.queue.length > 0) {
+								file = this.pop();
+								file.startUpload();
+							}
+							this.processUpload = false;
+						}
+					}
+			};
+
+		},
+		config: {
+			// can add more elements for Ext window styling
+			'method':'POST',
+			'callback': function(resp) { return resp;},
+			'url': "",
+			'accept': 'application/json',
+			'file_name_param':"filename",
+			'file_name_header':'X-File-Name',
+			'extra_headers':{}, //Extra parameters
+			'extra_post_data': {}, //Extra parameters
+			'send_multipart_form': false, //true for html4 TODO: make browser check
+			//'additional_params': {"location":""},
+			'www_encoded': false,
+			'image': {
+				'max_width': 800,
+				'max_height': 800
+			},
+			'fieldName': function(){
+				return 'filename'
+				}
+		},
+		/**
+		 * Repository's Query function
+		 */
+		query: function( p, callback) {
+			Aloha.Log.info(this,"Query Uploader");
+			var d = [];
+			if (p.inFolderId == this.repositoryId && p.queryString == null) {
+				d = this.objects;
+			} else {
+				d = this.objects.filter(function(e, i, a) {
+					var r = new RegExp(p.queryString, 'i');
+					var ret = false;
+					try {
+						if ( (!p.queryString || e.url.match(r)) &&
+								(p.inFolderId == e.parentId) ) {
+							ret = true;
+						}
+					} catch (error) {}
+					return ret;
+					/* (
+					( !queryString || e.displayName.match(r) || e.url.match(r) ) &&
+					( !objectTypeFilter || jQuery.inArray(e.objectType, objectTypeFilter) > -1) &&
+					( !inFolderId || inFolderId == e.parentId )
+				);*/
+				});
+			}
+			callback.call( this, d);
+		},
+		getChildren: function( p, callback) {
+			d = [];
+			var parentFolder = p.inFolderId.split("")[0];
+			if (parentFolder == "") {
+				parentFolder = "/";
+			}
+			d = this.objects.filter(function(e, i, a) {
+				if (e.parentId == parentFolder) return true;
+				return false;
+			});
+//			if (p.inFolderId == "com.gentics.aloha.plugins.DragAndDropFiles") {
+//				d = this.objects;
+//			}
+			callback.call( this, d);
+		},
+		/**
+		 * Triggers an upload
+		 * Resizes if it's an image which is too large
+		 */
+		addFileUpload: function(file) {
+			var type='';
+			//this.browser.show();
+
+			var d = this.objects.filter(function(e, i, a) {
+				if (e.name == file.name) return true;
+				return false;
+			});
+			if (d.length > 0 ) {
+				return d[0];
+			}
+			var len = this.objects.length,
+				id = 'ALOHA_idx_file' + len,
+				merge_conf = {};
+			jQuery.extend(true,merge_conf, this.config);
+
+			this.objects.push(new this.UploadFile({
+				file: file,
+				id: id,
+				name: file.name,
+				displayName: file.name,
+				parentId:"Uploads",
+				path:"Uploads",
+				url:"Uploads",
+				objectType:'file',
+				type:'file',
+				ulProgress: 0,
+				parent: this.uploadFolder,
+				repositoryId:this.repositoryId}));
+//			try {
+//				var repoNode = this.browser.tree.getNodeById("com.gentics.aloha.plugins.DragAndDropFiles");
+//				repoNode.expand();
+//				//this.browser.tree.getNodeById("Uploads").select();
+//			} catch(error) {}
+			return this.objects[len];
+		},
+		startFileUpload: function(id,upload_config) {
+			var type='',
+				d = this.objects.filter(function(e, i, a) {
+				if (e.id == id) {return true;}
+				return false;
+			});
+			if (d.length > 0 ) {
+				jQuery.extend(true,upload_config,this.upload_conf);
+				d[0].upload_config = upload_config;
+				this.uploadQueue.push(d[0]);
+				this.uploadQueue.processQueue();
+			} else {
+				Aloha.Log.error(this,"No file with that id");
+			}
+		},
+		UploadFolder: Aloha.RepositoryFolder.extend({
+			_constructor: function (properties) {
+				this._super(properties);
+			},
+			getDataObject: function(record) {
+				repo = Aloha.RepositoryManager.getRepository(record.data.repositoryId);
+				d = repo.objects.filter(function(e, i, a) {
+					if (e.id == record.data.id && e.file) return true;
+					return false;
+				});
+				if (d.length > 0 ) {
+					return d[0];
+				}
+				return null;
+			}
+		}),
+
+		/**
+		 * The file class
+		 */
+		UploadFile: Aloha.RepositoryDocument.extend({
+			_constructor: function(properties) {
+				var xhr = this.xhr,
+				that = this;
+				this._super(properties);
+				xhr.upload['onprogress'] = function(rpe) {
+					that.loaded = rpe.loaded;
+					that.total = rpe.total;
+					that.ulProgress = rpe.loaded / rpe.total;
+					Aloha.trigger('aloha-upload-progress',that);
+				}
+
+                xhr.onload = function(load) {
+                    try {
+                        that.src = that.upload_config.callback.call(that, xhr.responseText);
+                        if(xhr.status / 100 == 2){
+                            Aloha.trigger('aloha-upload-success', that);
+                        } else {
+                            Aloha.trigger('aloha-upload-failure', that);
+                        }
+                    } catch(e) {
+                        Aloha.trigger('aloha-upload-failure', that);
+                    }
+                };
+
+                xhr.onabort = function() {
+                    Aloha.trigger('aloha-upload-abort', that);
+                };
+
+                xhr.onerror = function(e) {
+                    Aloha.trigger('aloha-upload-error', that);
+                };
+			},
+			xhr: new XMLHttpRequest(),
+			contentTypeHeader: 'text/plain; charset=x-user-defined-binary',
+			/**
+			 * Process upload of a file
+			 */
+			startUpload: function() {
+				//if ()
+				var xhr = this.xhr, options = this.upload_config, that = this, data;
+
+				xhr.open(options.method, typeof(options.url) == "function" ? options.url(number) : options.url, true);
+				xhr.setRequestHeader("Cache-Control", "no-cache");
+				xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+				xhr.setRequestHeader(options.file_name_header, this.file.fileName);
+				xhr.setRequestHeader("X-File-Size", this.file.fileSize);
+				xhr.setRequestHeader("Accept", options.accept);
+//			l
+				if (!options.send_multipart_form) {
+					xhr.setRequestHeader("Content-Type", this.file.type + ";base64");
+					xhr.overrideMimeType(this.file.type);
+					var canvas = $('<canvas>').first(),
+						targetsize = {},
+						tempimg = new Image();
+					tempimg.onload = function() {
+						targetsize = {
+							height: tempimg.height,
+							width: tempimg.width
+						};
+
+
+						if (tempimg.width > tempimg.height) {
+							if (tempimg.width > options.image.max_width) {
+								targetsize.width = options.image.max_width;
+								targetsize.height = tempimg.height * options.image.max_width / tempimg.width;
+							}
+						} else {
+							if (tempimg.height > options.image.max_height) {
+								targetsize.height = options.image.max_height;
+								targetsize.width = tempimg.width * options.image.max_height / tempimg.height;
+							}
+
+						}
+
+						var canvas = document.createElement('canvas');
+						canvas.setAttribute('width', targetsize.width);
+						canvas.setAttribute('height', targetsize.height);
+						canvas.getContext('2d').drawImage(
+							tempimg,
+							0,
+							0,
+							tempimg.width,
+							tempimg.height,
+							0,
+							0,
+							targetsize.width,
+							targetsize.height
+						);
+						data = canvas.toDataURL(that.file.type);
+						Aloha.Log.debug(Aloha,"Sent Data (length:" + data.length + ") = " + data.substring(0,30));
+						xhr.send(data);
+					};
+					tempimg.src = this.file.objectURL || this.file.dataURI;
+				} else {
+					if (window.FormData) {//Many thanks to scottt.tw
+						var f = new FormData(),
+                            fieldname = typeof(options.fieldName) == "function" ? options.fieldName() : options.fieldName;
+                        // Note: Firefox (as of 14.0.1) does not yet support
+                        // the third filename parameter, it will send "blob" as
+                        // filename
+						f.append(fieldname, this.file.data, this.file.name);
+						xhr.send(f);
+					} else {
+						options.onBrowserIncompatible();
+					}
+				}
+			}
+//			/**
+//			 * Method to override to handle backend response
+//			 */
+//			delegateUploadEvent: 
+		})
+		//TODO: i18n
+	};
+	return repository.extend(Uploader);
+});
+	
+	//	var
+//		jQuery = window.alohaQuery || window.jQuery, $ = jQuery,
+//		GENTICS = window.GENTICS,
+//		Aloha = window.Aloha,
+//		/**
+//		 * Type description for UploadFolder
+//		 */
+//
+
+//	Aloha.Repositories = Aloha.Repositories||[];
+//	/**
+//	 * Repository for uploaded files
+//	 */
+
+//
+//
+//
+//
+//})(window,document);
+
+/* dragndropfiles.js is part of Aloha Editor project http://aloha-editor.org
+ *
+ * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor. 
+ * Copyright (c) 2010-2012 Gentics Software GmbH, Vienna, Austria.
+ * Contributors http://aloha-editor.org/contribution.php 
+ * 
+ * Aloha Editor is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or any later version.
+ *
+ * Aloha Editor is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * 
+ * As an additional permission to the GNU GPL version 2, you may distribute
+ * non-source (e.g., minimized or compacted) forms of the Aloha-Editor
+ * source code without the copy of the GNU GPL normally required,
+ * provided you include this license notice and a URL through which
+ * recipients can access the Corresponding Source.
+ */
+//(function(window, undefined) {
+//    var
+//        $ = jQuery = window.alohaQuery || window.jQuery,
+//        GENTICS = window.GENTICS,
+//        Aloha = GENTICS.Aloha;
+define('draganddropfiles/dragndropfiles',[	
+	'jquery',
+	'aloha/plugin',
+	'draganddropfiles/dropfilesrepository'
+	],
+function($, Plugin,DropFilesRepository) {
+	
+	var jQuery = $,
+	    GENTICS = window.GENTICS,	Aloha = window.Aloha;
+	return Plugin.create('draganddropfiles', {
+
+		/**
+		 * Default config, each editable may have his own stuff.
+		 */
+		config: {'max_file_size': 300000,
+			'max_file_count': 2,
+			'upload': {
+				'uploader_instance':new DropFilesRepository('draganddropfilesrepository','Dropped Files'),
+				'config': {
+					'callback': function(resp) { return resp;}, // what to do with the server response, must return the new file location,
+																//  if server return an error, throws an exception (throw "error")
+					'method':'POST',
+					'url': "",
+					'accept': 'application/json',
+					'file_name_param':"filename",
+					'file_name_header':'X-File-Name',
+					'extra_headers':{}, //Extra parameters
+					'extra_post_data': {}, //Extra parameters
+					'send_multipart_form': false, //true for html4 TODO: make browser check
+					'image': {
+						'max_width': 800,
+						'max_height': 800
+				},
+				//'additional_params': {"location":""},
+				'www_encoded': false
+				}
+			}
+		},
+		/**
+		 * Add a drop listener to the body of the whole document
+		 */
+		init: function() {
+			var that = this;
+				// add the listener
+				that.setBodyDropHandler();
+	//			stylePath = GENTICS_Aloha_base + '/plugins/com.gentics.aloha.plugins.DragAndDropFiles/style.css';
+	//			jQuery('head').append('<link rel="stylesheet" href="'
+	//					+ stylePath + '"></script>');
+				if (that.settings === undefined) {
+					that.settings = that.config;
+				} else {
+					that.settings = jQuery.extend(true, that.config, that.settings);
+				}
+
+				try {
+					that.uploader = that.initUploader(that.settings);
+				} catch(error) {
+					Aloha.Log.warn(that,error);
+					Aloha.Log.warn(that,"Error creating uploader, no upload will be processed");
+				}
+			Aloha.bind('aloha-file-upload-prepared', function(event, data) {
+				if (that.droppedFilesCount >= that.processedFiles) {
+					Aloha.trigger('aloha-allfiles-upload-prepared');
+				}
+				
+			});
+			Aloha.bind('aloha-allfiles-upload-prepared', function(event, data) {
+				var len = that.filesObjs.length;
+				if (that.dropInEditable) {
+					Aloha.trigger('aloha-drop-files-in-editable', {
+						'filesObjs':that.filesObjs,
+						'range': that.targetRange,
+						'editable': that.targetEditable});
+					var edConfig = that.getEditableConfig(that.targetEditable);
+					while(--len >= 0) {
+						that.uploader.startFileUpload(that.filesObjs[len].id,edConfig.upload.config);
+					}
+				} else {
+					Aloha.trigger('aloha-drop-files-in-page', that.filesObjs);
+					while(--len >= 0) {
+						that.uploader.startFileUpload(that.filesObjs[len].id,that.config.upload.config);
+					}
+				}
+			});
+		},
+		
+		/**
+		 * Init a custom uploader
+		 */
+		initUploader: function(customConfig) {
+			var
+				uploader_instance;
+			try {
+				uploader_instance = customConfig.upload.uploader_instance;
+			} catch(error) {
+				Aloha.Log.info(this,"Custom class loading error or not specified, using default");
+				uploader_instance = new DropFilesRepository('draganddropfilesrepository','Dropped Files');
+//				if (customConfig.upload.delegate) {
+//					uploader_instance.delegateUploadEvent = customConfig.upload.delegate;
+//				}
+			}
+			return uploader_instance;
+		},
+		/**
+		 * Prepare upload
+		 */
+		prepareFileUpload: function(file, target) {
+			var 
+				reader = new FileReader(),
+				that = this;
+			reader.file = file;
+            reader.onloadend = function() {
+                var currentFile = {
+                    name: this.file.name,
+                    type: this.file.type,
+                    fileSize: this.file.fileSize,
+                    fileName: this.file.fileName,
+                    dataURI: reader.result,
+                    data: this.file,
+                    droptarget: target
+                };
+                that.filesObjs.push(that.uploader.addFileUpload(currentFile));
+                that.processedFiles++;
+                Aloha.trigger('aloha-file-upload-prepared', currentFile);
+            };
+            reader.readAsDataURL(file);
+		},
+		/**
+		 * Our drop event Handler
+		 */
+		dropEventHandler: function(event) {
+			var 
+				that = this, edConfig, len, target,
+				files = event.dataTransfer.files, dropimg;
+			this.targetEditable = undefined;
+			this.droppedFilesCount = files.length;
+			this.processedFiles = 0;
+			Aloha.Log.info(that, this.droppedFilesCount + " files have been dropped on the page");
+			
+//			if (jQuery.browser.msie) {
+//				var textdata = event.dataTransfer.getData('Text');
+//				var urldata = event.dataTransfer.getData('URL');
+//				var imagedataW = window.event.dataTransfer.getData('URL');
+//				var textdataW = window.event.dataTransfer.getData('Text');
+//				var x = textdataW;
+//			}
+			// if no files where dropped, use default handler
+			if (!event.dataTransfer && !event.dataTransfer.files) {
+				event.sink = false;
+				return true;
+			}
+			if (this.droppedFilesCount < 1) {
+				event.sink = false;
+				return true;
+			}
+			if (event.preventDefault) {
+				event.preventDefault();
+			} else {
+				event.cancelBubble = true;
+			}
+			if (this.droppedFilesCount > that.settings.max_file_count) {
+				Aloha.Log.warn(that,"too much files dropped");
+				if (event.stopPropagation) {
+					event.stopPropagation();
+				} else {
+					event.returnValue = false;
+				}
+				return true;
+			}
+			target = jQuery(event.target);
+			//If drop in editable
+			if (target.hasClass('aloha-editable')) {
+				this.targetEditable = target;
+				target = this.targetEditable.children(':last');
+				if (target.hasClass('aloha-editable')) {
+					//nested space is needed in this tag, otherwise select won't success...
+					this.targetEditable.append('<span> </span>');
+					target = this.targetEditable.children(':last');
+				}
+			} else {
+				this.targetEditable = target.parents('.aloha-editable');
+			}
+			this.filesObjs = [];
+			this.dropInEditable = false;
+			len = this.droppedFilesCount;
+			if (this.targetEditable[0] === null) { // Process files out of editables
+				while(--len >= 0) {
+					if  ( // Set of conditions, can we resize the image, and do we have a conf to do it
+							!(!!document.createElement('canvas').getContext &&
+							  files[len].type.match(/image\//) &&
+							  edConfig.upload.config.image)
+						) {
+						if (files[len].size <= that.settings.max_file_size) {
+							that.prepareFileUpload(files[len], event.target);
+						} else {
+							this.processedFiles++;
+							Aloha.Log.warn(that,"max_file_size exeeded, upload of " + files[len].name + " aborted");
+						}
+					} else {
+						that.prepareFileUpload(files[len], event.target);
+					}
+				}
+			} else {
+				Aloha.getEditableById(this.targetEditable.attr('id')).activate();
+				that.targetRange = that.initializeRangeForDropEvent(event, this.targetEditable);
+				edConfig = that.getEditableConfig(this.targetEditable);
+				edConfig.upload = $.extend({},edConfig.upload,that.settings.upload);
+				if (edConfig) {
+					that.dropInEditable = true;
+				}
+				while(--len >= 0) {
+					try {
+						dropimg = edConfig.upload.config.image;
+					} catch (e) {
+						dropimg = false;
+					}
+					if  ( // Set of conditions, can we resize the image, and do we have a conf to do it
+							!(!!document.createElement('canvas').getContext &&
+							  files[len].type.match(/image\//) &&
+							  dropimg)
+						) {
+						if (files[len].size <= edConfig.max_file_size) {
+							that.prepareFileUpload(files[len], event.target);
+						} else {
+							this.processedFiles++;
+							Aloha.Log.warn(that,"max_file_size exeeded, upload of " + files[len].name + " aborted");
+						}
+					} else {
+						that.prepareFileUpload(files[len], event.target);
+					}
+				} //while
+			}
+			
+			if (event.stopPropagation) {
+				event.stopPropagation();
+			} else {
+				event.returnValue = false;
+			}
+			return false;
+		},
+		/**
+		 *  Attach drag and drop listeners to document body (Native JS way)
+		 *
+		 */
+		setBodyDropHandler: function() {
+			var that = this;
+			if (!document.body.BodyDragSinker){
+				document.body.BodyDragSinker = true;
+				this.onstr = "";
+				this.mydoc = document;
+				this.methodName = "addEventListener";
+				if (jQuery.browser.msie) {
+					this.onstr = "on";
+					this.methodName = "attachEvent";
+					this.mydoc = document.body;
+				}
+
+				// sets the default handler
+				this.mydoc[this.methodName](this.onstr+"drop", function(event) {that.dropEventHandler(event)} , false);
+
+                // Also bind aloha-upload-file so we can trigger file uploads
+                // from other plugins without directly introducing a
+                // dependency. The passed data contains the drop-target and the
+                // dropped files as members.
+                Aloha.bind('aloha-upload-file', function(event, data) {
+                    var dropevt = $.Event();
+                    dropevt.type = 'drop';
+                    dropevt.target = data.target;
+                    dropevt.dataTransfer = {
+                        files: data.files
+                    };
+
+                    that.dropEventHandler(dropevt);
+                } , false);
+
+			// TODO: improve below to allow default comportment behaviour if drop event is not a files drop event
+			this.mydoc[this.methodName](this.onstr+"dragenter", function(event) {
+				if (event.preventDefault)
+					event.preventDefault();
+				else
+					event.cancelBubble = true;
+				if (event.stopPropagation)
+					event.stopPropagation();
+				else
+					event.returnValue = false;
+				return false;
+			}, false);
+			this.mydoc[this.methodName](this.onstr+"dragleave", function(event) {
+				if (event.preventDefault)
+					event.preventDefault();
+				else
+					event.cancelBubble = true;
+				if (event.stopPropagation)
+					event.stopPropagation();
+				else
+					event.returnValue = false;
+				return false;
+			}, false);
+			this.mydoc[this.methodName](this.onstr+"dragover", function(event) {
+				if (event.preventDefault)
+					event.preventDefault();
+				else
+					event.cancelBubble = true;
+				if (event.stopPropagation)
+					event.stopPropagation();
+				else
+					event.returnValue = false;
+				//return false;
+			}, false);
+
+
+
+			} // if
+			// end body events
+			//==================
+		},
+		
+		/**
+		 * TODO do we realy need a range Object? May be it makes sense to attach it to the event
+		 * for plugin developers comfort.
+		 */
+		initializeRangeForDropEvent: function(event, editable) {
+			//var range = new GENTICS.Utils.RangeObject();
+			var target = jQuery(event.target);
+//			if (target.textNodes().length == 0 && target.html().length == 0) {
+//				target.html(" ");
+//			}
+			var	range = new Aloha.Selection.SelectionRange(true);
+			range.update();
+			if (target.textNodes().length == 0) {
+			  if (target[0].childNodes[0]) {
+          range.startContainer = target[0].childNodes[0];
+          range.endContainer = target[0].childNodes[0];
+        } else {
+          range.startContainer = target[0];
+          range.endContainer = target[0];
+        }
+			} else {
+				range.startContainer = target.textNodes()[0];
+				range.endContainer = target.textNodes()[0];
+			}
+		//
+				range.startOffset = 0;
+				range.endOffset = 0;
+			try {
+				range.select();
+			} catch (error) {
+				Aloha.Log.error(this,error);
+			}
+			return range;
+		}
+		
+	});
+});
+
+define('draganddropfiles/draganddropfiles-plugin',[ 'aloha', 'jquery', 'aloha/plugin', 'draganddropfiles/dragndropfiles'], 
+function ( Aloha, jQuery, Plugin, DragNDrop) {
+	return DragNDrop;
+});
+// Generated by CoffeeScript 1.6.3
+(function() {
+  define('cleanup/cleanup-plugin',['jquery', 'aloha', 'aloha/plugin', 'aloha/contenthandlermanager'], function($, Aloha, Plugin, ContentHandlerManager) {
+    var makeCleaner;
+    makeCleaner = function(WordHandler) {
+      return ContentHandlerManager.createHandler({
+        handleContent: function(content) {
+          var $content, xml, xmldoc;
+          content = WordHandler.handleContent(content);
+          $content = $("<div>" + content + "</div>");
+          $content.find('*[class*="Mso"]').each(function(idx, el) {
+            var c, remove, _i, _len, _ref;
+            remove = "";
+            _ref = el.classList;
+            for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+              c = _ref[_i];
+              if (/^Mso/.test(c)) {
+                remove = "" + remove + " " + c;
+              }
+            }
+            remove = remove.trim();
+            if (remove) {
+              return $(el).removeClass(remove);
+            }
+          });
+          $content.find('*[style]').each(function(idx, el) {
+            return $(el).removeAttr('style');
+          });
+          $content.find('a[href^="#"]').contents().unwrap();
+          $content.find('h1,h2,h3,h4,h5,h6').each(function(idx, el) {
+            var head, newhead;
+            head = $(el).text();
+            newhead = head.replace(/^[\d.]+([^ \s\d.])/, '$1');
+            if (head !== newhead) {
+              return $(el).text(newhead);
+            }
+          });
+          xmldoc = document.implementation.createDocument('http://www.w3.org/1999/xhtml', 'body', null);
+          $content.contents().clone().each(function(idx, node) {
+            return xmldoc.documentElement.appendChild(node);
+          });
+          xml = (new XMLSerializer()).serializeToString(xmldoc);
+          xml = xml.replace(/<\/body>$/, '').replace(/^<body[^>]*>/, '');
+          return xml;
+        }
+      });
+    };
+    return Plugin.create('cleanup', {
+      init: function() {
+        return Aloha.require(['contenthandler/wordcontenthandler'], function(WordHandler) {
+          return ContentHandlerManager.register('cleanup', makeCleaner(WordHandler));
+        });
+      }
+    });
+  });
+
+}).call(this);
+
+/*
  * css.normalize.js
  *
  * CSS Normalization
@@ -57843,12 +58626,12 @@ define('css!copy/css/copy',[],function(){});
 
 
 define('css!semanticblock/css/semanticblock-plugin',[],function(){});
-// Generated by CoffeeScript 1.7.1
+// Generated by CoffeeScript 1.5.0
 (function() {
   var __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
   define('semanticblock/semanticblock-plugin',['aloha', 'block/block', 'block/blockmanager', 'aloha/plugin', 'aloha/pluginmanager', 'jquery', 'aloha/ephemera', 'ui/ui', 'ui/button', 'copy/copy-plugin', 'css!semanticblock/css/semanticblock-plugin.css'], function(Aloha, Block, BlockManager, Plugin, pluginManager, jQuery, Ephemera, UI, Button, Copy) {
-    var DIALOG_HTML, activate, bindEvents, blockControls, blockDragHelper, blockIdentifier, blockTemplate, cleanIds, cleanWhitespace, copyBuffer, deactivate, getLabel, getType, insertElement, pluginEvents, registeredTypes, semanticBlock, topControls;
+    var DIALOG_HTML, activate, bindEvents, blockControls, blockDragHelper, blockIdentifier, blockTemplate, cleanIds, cleanWhitespace, copyBuffer, deactivate, getLabel, getType, insertElement, pluginEvents, registeredTypes, semanticBlock, settings, topControls;
     if (pluginManager.plugins.semanticblock) {
       return pluginManager.plugins.semanticblock;
     }
@@ -57858,7 +58641,8 @@ define('css!semanticblock/css/semanticblock-plugin',[],function(){});
       }
     });
     BlockManager.registerBlockType('semanticBlock', semanticBlock);
-    DIALOG_HTML = '<div class="semantic-settings modal fade" id="linkModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">\n  <div class="modal-dialog">\n  <div class="modal-content">\n\n  <div class="modal-header">\n    <h3></h3>\n  </div>\n  <div class="modal-body">\n        <strong>Custom class</strong>\n        <p>\n            Give this element a custom "class". Nothing obvious will change in your document.\n            This is for advanced book styling and requires support from the publishing system.\n        </p>\n        <input type="text" placeholder="custom element class" name="custom_class">\n  </div>\n  <div class="modal-footer">\n    <button class="btn btn-primary action submit">Save changes</button>\n    <button class="btn action cancel">Cancel</button>\n  </div>\n\n  </div>\n  </div>\n</div>';
+    settings = {};
+    DIALOG_HTML = '<div class="semantic-settings modal fade" id="linkModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">\n  <div class="modal-dialog">\n    <div class="modal-content">\n      <div class="modal-header">\n        <h3 class="modal-title"></h3>\n      </div>\n      <div class="modal-body">\n        <strong>Custom class</strong>\n        <p>\n            Give this element a custom "class". Nothing obvious will change in your document.\n            This is for advanced book styling and requires support from the publishing system.\n        </p>\n        <input type="text" placeholder="custom element class" name="custom_class">\n      </div>\n      <div class="modal-footer">\n        <button class="btn btn-primary action submit">Save changes</button>\n        <button class="btn action cancel">Cancel</button>\n      </div>\n    </div>\n  </div>\n</div>';
     blockTemplate = jQuery('<div class="semantic-container aloha-ephemera-wrapper"></div>');
     topControls = jQuery('<div class="semantic-controls-top aloha-ephemera">\n  <a class="copy" title="Copy this element"><i class="fa fa-copy icon-copy"></i> Copy element</button>\n</div>');
     blockControls = jQuery('<div class="semantic-controls aloha-ephemera">\n  <button class="semantic-delete" title="Remove this element"><i class="fa fa-times icon-remove"></i></button>\n  <button class="semantic-settings" title="Advanced options for this element"><i class="fa fa-cog icon-cog"></i></button>\n</div>');
@@ -58072,6 +58856,9 @@ define('css!semanticblock/css/semanticblock-plugin',[],function(){});
             'aloha-block-type': 'semanticBlock'
           });
           type.activate($element);
+          if (!settings.showLabels) {
+            $element.find('.type-container .type').remove();
+          }
           return;
         }
         $element.children('[placeholder],[hover-placeholder]').andSelf().filter('[placeholder],[hover-placeholder]').each(function() {
@@ -58153,6 +58940,7 @@ define('css!semanticblock/css/semanticblock-plugin',[],function(){});
     });
     return Plugin.create('semanticblock', {
       defaults: {
+        showLabels: true,
         defaultSelector: 'div:not(.title,.aloha-oer-block,.aloha-editable,.aloha-block,.aloha-ephemera-wrapper,.aloha-ephemera)'
       },
       makeClean: function(content) {
@@ -58168,94 +58956,111 @@ define('css!semanticblock/css/semanticblock-plugin',[],function(){});
         return cleanWhitespace(content);
       },
       init: function() {
+        var _this = this;
         Ephemera.ephemera().pruneFns.push(function(node) {
           return jQuery(node).removeClass('aloha-block-dropzone aloha-editable-active aloha-editable aloha-block-blocklevel-sortable ui-sortable').removeAttr('contenteditable placeholder').get(0);
         });
-        Aloha.bind('aloha-editable-activated', (function(_this) {
-          return function(e, params) {
-            var $root;
-            $root = params.editable.obj;
-            if ($root.is('.aloha-root-editable')) {
-              return jQuery('.semantic-drag-source').children().each(function() {
-                var element, elementLabel;
-                element = jQuery(this);
-                elementLabel = (element.data('type') || element.attr('class')).split(' ')[0];
-                return element.draggable({
-                  connectToSortable: $root,
-                  appendTo: jQuery('#content'),
-                  revert: 'invalid',
-                  helper: function() {
-                    var helper;
-                    helper = jQuery(blockDragHelper).clone();
-                    helper.find('.title').text(elementLabel);
-                    return helper;
-                  },
-                  start: function(e, ui) {
-                    $root.addClass('aloha-block-dropzone');
-                    return jQuery(ui.helper).addClass('dragging');
-                  },
-                  refreshPositions: true
-                });
+        Aloha.bind('aloha-editable-activated', function(e, params) {
+          var $root;
+          $root = params.editable.obj;
+          if ($root.is('.aloha-root-editable')) {
+            return jQuery('.semantic-drag-source').children().each(function() {
+              var element, elementLabel;
+              element = jQuery(this);
+              elementLabel = (element.data('type') || element.attr('class')).split(' ')[0];
+              return element.draggable({
+                connectToSortable: $root,
+                appendTo: jQuery('#content'),
+                revert: 'invalid',
+                helper: function() {
+                  var helper;
+                  helper = jQuery(blockDragHelper).clone();
+                  helper.find('.title').text(elementLabel);
+                  return helper;
+                },
+                start: function(e, ui) {
+                  $root.addClass('aloha-block-dropzone');
+                  return jQuery(ui.helper).addClass('dragging');
+                },
+                refreshPositions: true
               });
-            }
-          };
-        })(this));
-        return Aloha.bind('aloha-editable-created', (function(_this) {
-          return function(e, params) {
-            var $root, classes, selector, sortableInterval, type, _i, _len;
-            $root = params.obj;
-            classes = [];
-            for (_i = 0, _len = registeredTypes.length; _i < _len; _i++) {
-              type = registeredTypes[_i];
+            });
+          }
+        });
+        return Aloha.bind('aloha-editable-created', function(e, params) {
+          var $root, classes, selector, sortableInterval, type, _i, _len;
+          $root = params.obj;
+          settings = _this.settings;
+          selector = _this.settings.defaultSelector;
+          classes = [];
+          for (_i = 0, _len = registeredTypes.length; _i < _len; _i++) {
+            type = registeredTypes[_i];
+            if (type.selector) {
               classes.push(type.selector);
             }
-            selector = _this.settings.defaultSelector + ',' + classes.join();
-            sortableInterval = setInterval(function() {
-              if ($root.data('sortable')) {
-                clearInterval(sortableInterval);
-                if ($root.data('disableDropTarget')) {
-                  $root.removeClass('aloha-block-blocklevel-sortable aloha-block-dropzone');
-                }
-                $root.sortable('option', 'helper', 'clone');
-                $root.sortable('option', 'appendTo', jQuery('#content').parent());
-                $root.sortable('option', 'change', function(e, ui) {
-                  return ui.item.data("disableDrop", ui.placeholder.parent().data('disableDropTarget'));
-                });
-                $root.sortable('option', 'stop', function(e, ui) {
-                  var $element, _ref, _ref1;
-                  if (ui.item.data('disableDrop')) {
-                    jQuery(this).sortable("cancel");
-                    return;
-                  }
-                  $element = jQuery(ui.item);
-                  if ($element.is(selector)) {
-                    activate($element);
-                  }
-                  if ((_ref = getType($element)) != null) {
-                    if (typeof _ref.onDrop === "function") {
-                      _ref.onDrop($element);
-                    }
-                  }
-                  if ((_ref1 = Aloha.activeEditable) != null) {
-                    _ref1.smartContentChange({
-                      type: 'block-change'
-                    });
-                  }
-                  return $element.removeClass('drag-active');
-                });
-                $root.sortable('option', 'placeholder', 'aloha-oer-block-placeholder aloha-ephemera');
+          }
+          if (classes.length) {
+            selector += ',' + classes.join();
+          }
+          sortableInterval = setInterval(function() {
+            if ($root.data('sortable')) {
+              clearInterval(sortableInterval);
+              if ($root.data('disableDropTarget')) {
+                $root.removeClass('aloha-block-blocklevel-sortable aloha-block-dropzone');
               }
-              return 100;
-            });
-            if ($root.is('.aloha-root-editable')) {
-              return $root.find(selector).each(function() {
-                if (!jQuery(this).parents('.semantic-drag-source').length) {
-                  return activate(jQuery(this));
-                }
+              $root.sortable('option', 'helper', 'clone');
+              $root.sortable('option', 'appendTo', jQuery('#content').parent());
+              $root.sortable('option', 'change', function(e, ui) {
+                return ui.item.data("disableDrop", ui.placeholder.parent().data('disableDropTarget'));
               });
+              $root.sortable('option', 'stop', function(e, ui) {
+                var $element, _ref, _ref1;
+                if (ui.item.data('disableDrop')) {
+                  jQuery(this).sortable("cancel");
+                  return;
+                }
+                $element = jQuery(ui.item);
+                if ($element.is(selector)) {
+                  activate($element);
+                }
+                if ((_ref = getType($element)) != null) {
+                  if (typeof _ref.onDrop === "function") {
+                    _ref.onDrop($element);
+                  }
+                }
+                if ((_ref1 = Aloha.activeEditable) != null) {
+                  _ref1.smartContentChange({
+                    type: 'block-change'
+                  });
+                }
+                return $element.removeClass('drag-active');
+              });
+              $root.sortable('option', 'placeholder', 'aloha-oer-block-placeholder aloha-ephemera');
             }
-          };
-        })(this));
+            return 100;
+          });
+          if ($root.is('.aloha-root-editable')) {
+            return $root.find(selector).each(function() {
+              if (!jQuery(this).parents('.semantic-drag-source').length) {
+                return activate(jQuery(this));
+              }
+            });
+          }
+        });
+      },
+      insertPlaceholder: function() {
+        var placeholder, range;
+        placeholder = $('<span class="aloha-ephemera oer-placeholder"></span>');
+        range = Aloha.Selection.getRangeObject();
+        GENTICS.Utils.Dom.insertIntoDOM(placeholder, range, Aloha.activeEditable.obj);
+        return placeholder;
+      },
+      insertOverPlaceholder: function($element, $placeholder) {
+        $element.addClass('semantic-temp');
+        $placeholder.replaceWith($element);
+        $element = Aloha.jQuery('.semantic-temp').removeClass('semantic-temp');
+        activate($element);
+        return $element;
       },
       insertAtCursor: function(template) {
         var $element, range;
@@ -58294,44 +59099,109 @@ define('css!semanticblock/css/semanticblock-plugin',[],function(){});
 }).call(this);
 
 
-define('css!assorted/css/image',[],function(){});
-// Generated by CoffeeScript 1.7.1
+define('css!figure/css/figure-plugin',[],function(){});
+// Generated by CoffeeScript 1.6.3
 (function() {
-  define('assorted/image',['aloha', 'jquery', 'aloha/plugin', 'image/image-plugin', 'ui/ui', 'semanticblock/semanticblock-plugin', 'css!assorted/css/image.css'], function(Aloha, jQuery, AlohaPlugin, Image, UI, semanticBlock) {
-    var DIALOG_HTML, DIALOG_HTML2, DIALOG_HTML_CONTAINER, WARNING_IMAGE_PATH, activate, deactivate, getWidth, insertImage, setEditText, setThankYou, setWidth, showModalDialog, showModalDialog2;
-    WARNING_IMAGE_PATH = '/../plugins/oer/image/img/warning.png';
+  define('figure/figure-plugin',['aloha', 'jquery', 'aloha/plugin', 'semanticblock/semanticblock-plugin', 'css!figure/css/figure-plugin.css'], function(Aloha, jQuery, Plugin, semanticBlock) {
+    var activate, deactivate;
+    activate = function(element) {
+      $(element).find('div.title').aloha();
+      if ($(element).find('figcaption').children().length !== 1) {
+        $(element).find('figcaption').wrapInner('<p>');
+      }
+      return $(element).find('figcaption > p').aloha();
+    };
+    deactivate = function(element) {
+      $(element).find('div.title').mahalo();
+      return $(element).find('figcaption > p').mahalo();
+    };
+    return Plugin.create('oer-figure', {
+      getLabel: function() {
+        return 'Figure';
+      },
+      activate: activate,
+      deactivate: deactivate,
+      selector: 'figure',
+      insertPlaceholder: function() {
+        return semanticBlock.insertPlaceholder();
+      },
+      insertOverPlaceholder: function($content, $placeholder) {
+        var $figure;
+        $figure = $('<figure>').append('<div class="title">').append($content).append('<figcaption>');
+        return semanticBlock.insertOverPlaceholder($figure, $placeholder);
+      },
+      init: function() {
+        var plugin;
+        plugin = this;
+        return semanticBlock.register(plugin);
+      }
+    });
+  });
+
+}).call(this);
+
+
+define('css!assorted/css/image',[],function(){});
+// Generated by CoffeeScript 1.5.0
+(function() {
+
+  define('assorted/image',['aloha', 'jquery', 'aloha/plugin', 'image/image-plugin', 'ui/ui', 'figure/figure-plugin', 'css!assorted/css/image.css'], function(Aloha, jQuery, AlohaPlugin, Image, UI, Figure) {
+    var DIALOG_HTML, DIALOG_HTML2, DIALOG_HTML_CONTAINER, WARNING_IMAGE_PATH, initialize, insertImage, setEditText, setThankYou, showCreateDialog, showEditDialog, showModalDialog2;
+    WARNING_IMAGE_PATH = '/../plugins/oer/assorted/img/warning.png';
     DIALOG_HTML_CONTAINER = '<form class="plugin image modal fade form-horizontal" id="linkModal" tabindex="-1" role="dialog" aria-labelledby="linkModalLabel" aria-hidden="true" data-backdrop="false" />';
-    DIALOG_HTML = '<div class="modal-dialog">\n<div class="modal-content">\n\n  <div class="modal-header">\n    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>\n    <h3 class="modal-title">Insert image</h3>\n  </div>\n  <div class="modal-body">\n    <div class="image-options">\n        <div class="image-selection">\n          <div class="dia-alternative">\n            <span class="upload-image-link btn-link">Choose an image to upload</span>\n            <input type="file" class="upload-image-input">\n          </div>\n          <div class="dia-alternative">\n            OR\n          </div>\n          <div class="dia-alternative">\n            <span class="upload-url-link btn-link">get image from the Web</span>\n            <input type="url" class="upload-url-input" placeholder="Enter URL of image ...">\n          </div>\n        </div>\n        <div class="placeholder preview hide">\n          <img class="preview-image"/>\n        </div>\n    </div>\n    <fieldset>\n      <label><strong>Image title:</strong></label>\n      <textarea class="image-title" placeholder="Shows up above image" rows="1"></textarea>\n\n      <label><strong>Image caption:</strong></label>\n      <textarea class="image-caption" placeholder="Shows up below image" rows="1"></textarea>\n    </fieldset>\n    <div class="image-alt">\n      <div class="forminfo">\n        <i class="fa fa-warning icon-warning"></i><strong>Describe the image for someone who cannot see it.</strong> This description can be read aloud, making it possible for visually impaired learners to understand the content.</strong>\n      </div>\n      <div>\n        <textarea name="alt" placeholder="Enter description ..." rows="1"></textarea>\n      </div>\n    </div>\n  </div>\n  <div class="modal-footer">\n    <button type="submit" disabled="true" class="btn btn-primary action insert">Next</button>\n    <button class="btn action cancel">Cancel</button>\n  </div>\n</div><!-- /.modal-content -->\n</div><!-- /.modal-dialog -->';
+    DIALOG_HTML = '<div class="modal-dialog">\n<div class="modal-content">\n\n  <div class="modal-header">\n    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>\n    <h3 class="modal-title">Insert image</h3>\n  </div>\n  <div class="modal-body">\n    <div class="image-options">\n        <div class="image-selection">\n          <div class="dia-alternative">\n            <span class="upload-image-link btn-link">Choose an image to upload</span>\n            <input type="file" class="upload-image-input">\n          </div>\n          <div class="dia-alternative">\n            OR\n          </div>\n          <div class="dia-alternative">\n            <span class="upload-url-link btn-link">get image from the Web</span>\n            <input type="url" class="upload-url-input" placeholder="Enter URL of image ...">\n          </div>\n        </div>\n        <div class="placeholder preview" style="display: none;">\n          <img class="preview-image"/>\n        </div>\n    </div>\n    <div class="image-alt">\n      <div class="forminfo">\n        <i class="fa fa-warning icon-warning"></i><strong>Describe the image for someone who cannot see it.</strong> This description can be read aloud, making it possible for visually impaired learners to understand the content.</strong>\n      </div>\n      <div>\n        <textarea name="alt" placeholder="Enter description ..." rows="3"></textarea>\n      </div>\n    </div>\n  </div>\n  <div class="modal-footer">\n    <button class="btn action cancel">Cancel</button>\n    <button type="submit" disabled="true" class="btn btn-primary action insert">Next</button>\n  </div>\n</div><!-- /.modal-content -->\n</div><!-- /.modal-dialog -->';
     DIALOG_HTML2 = '<div class="modal-dialog">\n<div class="modal-content">\n  <div class="modal-header">\n    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>\n    <h3>Insert image</h3>\n  </div>\n  <div class="modal-body">\n    <div>\n      <strong>Source for this image (Required)</strong>\n    </div>\n    <div class="source-selection">\n      <ul style="list-style-type: none; padding: 0; margin: 0;">\n        <li id="listitem-i-own-this">\n          <label class="radio">\n            <input type="radio" name="image-source-selection" value="i-own-this">I own it (no citation needed)\n          </label>\n        </li>\n        <li id="listitem-i-got-permission">\n          <label class="radio">\n            <input type="radio" name="image-source-selection" value="i-got-permission">I am allowed to reuse it:\n          </label>\n          <div class="source-selection-allowed">\n            <fieldset>\n              <label>Who is the original author of this image?</label>\n              <input type="text" disabled="disabled" id="reuse-author">\n\n              <label>What organization owns this image?</label>\n              <input type="text" disabled="disabled" id="reuse-org">\n\n              <label>What is the original URL of this image?</label>\n              <input type="text" disabled="disabled" id="reuse-url" placeholder="http://">\n\n              <label>Permission to reuse</label>\n              <select id="reuse-license" disabled="disabled">\n                <option value="">Choose a license</option>\n                <option value="http://creativecommons.org/licenses/by/3.0/">\n                  Creative Commons Attribution - CC-BY</option>\n                <option value="http://creativecommons.org/licenses/by-nd/3.0/">\n                  Creative Commons Attribution-NoDerivs - CC BY-ND</option>\n                <option value="http://creativecommons.org/licenses/by-sa/3.0/">\n                  Creative Commons Attribution-ShareAlike - CC BY-SA</option>\n                <option value="http://creativecommons.org/licenses/by-nc/3.0/">\n                  Creative Commons Attribution-NonCommercial - CC BY-NC</option>\n                <option value="http://creativecommons.org/licenses/by-nc-sa/3.0/">\n                  Creative Commons Attribution-NonCommercial-ShareAlike - CC BY-NC-SA</option>\n                <option value="http://creativecommons.org/licenses/by-nc-nd/3.0/">\n                  Creative Commons Attribution-NonCommercial-NoDerivs - CC BY-NC-ND</option>\n                <option value="http://creativecommons.org/publicdomain/">\n                  Public domain</option>\n                <option>other</option>\n              </select>\n            </fieldset>\n          </div>\n        </li>\n        <li id="listitem-i-dont-know">\n          <label class="radio">\n            <input type="radio" name="image-source-selection" value="i-dont-know">I don\'t know (skip citation for now)\n          </label>\n        </li>\n      </ul>\n    </div>\n  </div>\n  <div class="modal-footer">\n    <button type="submit" class="btn btn-primary action insert">Save</button>\n    <button class="btn action cancel">Cancel</button>\n</div><!-- /.modal-content -->\n</div><!-- /.modal-dialog -->';
-    showModalDialog = function($el) {
-      var $caption, $figure, $imageselect, $img, $placeholder, $submit, $title, $uploadImage, $uploadUrl, deferred, dialog, editing, imageAltText, imageSource, loadLocalFile, promise, root, setImageSource, settings, showRemoteImage;
-      settings = Aloha.require('assorted/assorted-plugin').settings;
-      root = Aloha.activeEditable.obj;
+    showEditDialog = function($el) {
+      var deferred, dialog,
+        _this = this;
       dialog = jQuery(DIALOG_HTML_CONTAINER);
       dialog.append(jQuery(DIALOG_HTML));
+      dialog.find('.image-options').remove();
+      dialog.find('.btn.action.attribution').show();
+      dialog.find('[name=alt]').val($el.attr('alt'));
+      dialog.find('.btn.action.insert').text('Save').removeAttr('disabled');
+      deferred = $.Deferred();
+      dialog.find('.btn.action.attribution').click(function() {
+        return deferred.done(function() {
+          return showModalDialog2($el);
+        });
+      });
+      dialog.on('submit', function(evt) {
+        evt.preventDefault();
+        setEditText($el);
+        if (dialog.find('[name=alt]').val() && !$el.attr('alt')) {
+          setThankYou($el);
+        }
+        $el.attr('alt', dialog.find('[name=alt]').val());
+        dialog.modal('hide');
+        return deferred.resolve($el);
+      });
+      dialog.on('shown shown.bs.modal', function() {
+        return dialog.find('input,textarea,select').filter(':visible').first().focus();
+      });
+      dialog.on('click', '.btn.action.cancel', function(evt) {
+        evt.preventDefault();
+        deferred.reject();
+        return dialog.modal('hide');
+      });
+      dialog.modal({
+        show: true
+      });
+      return deferred.promise();
+    };
+    showCreateDialog = function() {
+      var $imageselect, $placeholder, $submit, $uploadImage, $uploadUrl, deferred, dialog, imageSource, loadLocalFile, setImageSource, settings, showRemoteImage,
+        _this = this;
+      settings = Aloha.require('assorted/assorted-plugin').settings;
+      dialog = jQuery(DIALOG_HTML_CONTAINER);
+      dialog.append(jQuery(DIALOG_HTML));
+      $submit = dialog.find('.action.insert');
       $imageselect = dialog.find('.image-selection');
       $placeholder = dialog.find('.placeholder.preview');
       $uploadImage = dialog.find('.upload-image-input').hide();
       $uploadUrl = dialog.find('.upload-url-input').hide();
       $submit = dialog.find('.action.insert');
-      $img = $el;
-      imageSource = $img.attr('src');
-      imageAltText = $img.attr('alt');
-      $figure = jQuery($img.parents('figure')[0]);
-      $title = $figure.find('div.title');
-      $caption = $figure.find('figcaption');
-      if (imageSource) {
-        dialog.find('.action.insert').removeAttr('disabled');
-      }
-      editing = Boolean(imageSource);
-      dialog.find('[name=alt]').val(imageAltText);
-      dialog.find('.image-title').val($title.text());
-      dialog.find('.image-caption').val($caption.text());
-      if (editing) {
-        dialog.find('.image-options').hide();
-        dialog.find('.figure-options').hide();
-        dialog.find('.btn-primary').text('Save');
-      }
+      imageSource = null;
       (function(img, baseurl) {
         return img.onerror = function() {
           var errimg;
@@ -58367,7 +59237,7 @@ define('css!assorted/css/image',[],function(){});
       dialog.find('.upload-url-link').on('click', function() {
         $placeholder.hide();
         $uploadImage.hide();
-        return $uploadUrl.show().removeClass('hide').focus();
+        return $uploadUrl.show().focus();
       });
       $uploadImage.on('change', function() {
         var $previewImg, files;
@@ -58376,7 +59246,7 @@ define('css!assorted/css/image',[],function(){});
           if (settings.image.preview) {
             $previewImg = $placeholder.find('img');
             loadLocalFile(files[0], $previewImg);
-            $placeholder.show().removeClass('hide');
+            $placeholder.show();
             return $imageselect.hide();
           } else {
             return loadLocalFile(files[0]);
@@ -58390,7 +59260,7 @@ define('css!assorted/css/image',[],function(){});
         setImageSource(url);
         if (settings.image.preview) {
           $previewImg.attr('src', url);
-          $placeholder.show().removeClass('hide');
+          $placeholder.show();
           return $imageselect.hide();
         }
       };
@@ -58400,123 +59270,63 @@ define('css!assorted/css/image',[],function(){});
         return showRemoteImage();
       });
       deferred = $.Deferred();
-      dialog.on('submit', (function(_this) {
-        return function(evt) {
-          var altAdded, changed, editableId;
-          evt.preventDefault();
-          altAdded = (!$el.attr('alt')) && dialog.find('[name=alt]').val();
-          if (dialog.find('[name=alt]').val() !== $el.attr('alt')) {
-            changed = true;
-          }
-          $el.attr('src', imageSource);
-          $el.attr('alt', dialog.find('[name=alt]').val());
-          if (dialog.find('.image-title').val()) {
-            if (dialog.find('.image-title').val() !== $title.text()) {
-              changed = true;
-            }
-            $title.html(dialog.find('.image-title').val());
-          }
-          if (dialog.find('.image-caption').val()) {
-            if (dialog.find('.image-caption').val() !== $caption.text()) {
-              changed = true;
-            }
-            $caption.html(dialog.find('.image-caption').val());
-          }
-          if (altAdded) {
-            setThankYou($el.parent());
-          } else {
-            setEditText($el.parent());
-          }
-          if (changed) {
-            editableId = $el.parents('.aloha-editable').last().attr('id');
-            Aloha.getEditableById(editableId).smartContentChange({
-              type: 'block-change'
-            });
-          }
-          return deferred.resolve({
-            target: $el[0],
-            files: $uploadImage[0].files
-          });
-        };
-      })(this));
-      dialog.on('shown shown.bs.modal', (function(_this) {
-        return function() {
-          if (!dialog.find('[name=alt]').val().length) {
-            return dialog.find('[name=alt]').focus();
-          } else {
-            return dialog.find('input,textarea,select').filter(':visible').first().focus();
-          }
-        };
-      })(this));
-      dialog.on('click', '.btn.action.cancel', (function(_this) {
-        return function(evt) {
-          evt.preventDefault();
-          deferred.reject({
-            target: $el[0],
-            editing: editing
-          });
-          return dialog.modal('hide');
-        };
-      })(this));
-      dialog.on('hidden hidden.bs.modal', function(event) {
-        if (deferred.state() === 'pending') {
-          deferred.reject({
-            target: $el[0],
-            editing: editing
-          });
-        }
-        return dialog.remove();
+      dialog.on('submit', function(evt) {
+        var $el;
+        evt.preventDefault();
+        $el = $('<img>');
+        $el.attr('src', imageSource);
+        $el.attr('alt', dialog.find('[name=alt]').val());
+        dialog.modal('hide');
+        return deferred.resolve($el);
       });
-      promise = jQuery.extend(true, deferred.promise(), {
-        show: function(title) {
-          if (title) {
-            dialog.find('.modal-header h3').text(title);
-          }
-          return dialog.modal('show');
-        }
+      dialog.on('shown shown.bs.modal', function() {
+        return dialog.find('input,textarea,select').filter(':visible').first().focus();
       });
-      return {
-        dialog: dialog,
-        figure: $figure,
-        img: $img,
-        promise: promise
-      };
+      dialog.on('click', '.btn.action.cancel', function(evt) {
+        evt.preventDefault();
+        deferred.reject();
+        return dialog.modal('hide');
+      });
+      dialog.on('hidden hidden.bs.modal', function() {
+        return deferred.reject();
+      });
+      dialog.modal({
+        show: true
+      });
+      return deferred.promise();
     };
-    showModalDialog2 = function($figure, $img, $dialog, editing) {
-      var $option, basedOnURL, creator, deferred, publisher, rightsUrl, src;
-      $dialog.children().remove();
+    showModalDialog2 = function($img) {
+      var $dialog, $option, basedOnURL, creator, deferred, publisher, rightsUrl, src,
+        _this = this;
+      $dialog = jQuery(DIALOG_HTML_CONTAINER);
       $dialog.append(jQuery(DIALOG_HTML2));
       src = $img.attr('src');
       if (src && /^http/.test(src)) {
         $dialog.find('input#reuse-url').val(src);
       }
-      if (editing) {
-        creator = $img.attr('data-lrmi-creator');
-        if (creator) {
-          $dialog.find('input#reuse-author').val(creator);
-        }
-        publisher = $img.attr('data-lrmi-publisher');
-        if (publisher) {
-          $dialog.find('input#reuse-org').val(publisher);
-        }
-        basedOnURL = $img.attr('data-lrmi-isBasedOnURL');
-        if (basedOnURL) {
-          $dialog.find('input#reuse-url').val(basedOnURL);
-        }
-        rightsUrl = $img.attr('data-lrmi-useRightsURL');
-        if (rightsUrl) {
-          $option = $dialog.find('select#reuse-license option[value="' + rightsUrl + '"]');
-          if ($option) {
-            $option.prop('selected', true);
-          }
-        }
-        if (creator || publisher || rightsUrl) {
-          $dialog.find('input[value="i-got-permission"]').prop('checked', true);
-        }
-        $dialog.find('input[type=radio]').click();
-      } else {
-
+      creator = $img.attr('data-lrmi-creator');
+      if (creator) {
+        $dialog.find('input#reuse-author').val(creator);
       }
+      publisher = $img.attr('data-lrmi-publisher');
+      if (publisher) {
+        $dialog.find('input#reuse-org').val(publisher);
+      }
+      basedOnURL = $img.attr('data-lrmi-isBasedOnURL');
+      if (basedOnURL) {
+        $dialog.find('input#reuse-url').val(basedOnURL);
+      }
+      rightsUrl = $img.attr('data-lrmi-useRightsURL');
+      if (rightsUrl) {
+        $option = $dialog.find('select#reuse-license option[value="' + rightsUrl + '"]');
+        if ($option) {
+          $option.prop('selected', true);
+        }
+      }
+      if (creator || publisher || rightsUrl) {
+        $dialog.find('input[value="i-got-permission"]').prop('checked', true);
+      }
+      $dialog.find('input[type=radio]').click();
       $dialog.find('input[name="image-source-selection"]').click(function(evt) {
         var inputs;
         inputs = jQuery('.source-selection-allowed').find('input,select');
@@ -58527,183 +59337,130 @@ define('css!assorted/css/image',[],function(){});
         }
         evt.stopPropagation();
       });
-      $dialog.find('li#listitem-i-own-this, li#listitem-i-got-permission, li#listitem-i-dont-know').click((function(_this) {
-        return function(evt) {
-          var $cb, $current_target;
-          $current_target = jQuery(evt.currentTarget);
-          $cb = $current_target.find('input[name="image-source-selection"]');
-          if ($cb) {
-            $cb.click();
-          }
-        };
-      })(this));
+      $dialog.find('li#listitem-i-own-this, li#listitem-i-got-permission, li#listitem-i-dont-know').click(function(evt) {
+        var $cb, $current_target;
+        $current_target = jQuery(evt.currentTarget);
+        $cb = $current_target.find('input[name="image-source-selection"]');
+        if ($cb) {
+          $cb.click();
+        }
+      });
       deferred = $.Deferred();
-      $dialog.off('submit').on('submit', (function(_this) {
-        return function(evt) {
-          var attribution, buildAttribution, editableId, rightsName;
-          evt.preventDefault();
-          buildAttribution = function(creator, publisher, basedOnURL, rightsName) {
-            var attribution, baseOn, baseOnEscaped;
-            attribution = "";
-            if (creator && creator.length > 0) {
-              attribution += "Image by " + creator + ".";
-            }
-            if (publisher && publisher.length > 0) {
-              attribution += "Published by " + publisher + ".";
-            }
-            if (basedOnURL && basedOnURL.length > 0) {
-              baseOn = '<link src="' + basedOnURL + '">Original source</link>.';
-              baseOnEscaped = jQuery('<div />').text(baseOn).html();
-              attribution += baseOn;
-            }
-            if (rightsName && rightsName.length > 0) {
-              attribution += 'License: ' + rightsName + ".";
-            }
-            return attribution;
-          };
-          if ($dialog.find('input[value="i-got-permission"]').prop('checked')) {
-            creator = $dialog.find('input#reuse-author').val();
-            if (creator && creator.length > 0) {
-              $img.attr('data-lrmi-creator', creator);
-            } else {
-              $img.removeAttr('data-lrmi-creator');
-            }
-            publisher = $dialog.find('input#reuse-org').val();
-            if (publisher && publisher.length > 0) {
-              $img.attr('data-lrmi-publisher', publisher);
-            } else {
-              $img.removeAttr('data-lrmi-publisher');
-            }
-            basedOnURL = $dialog.find('input#reuse-url').val();
-            if (basedOnURL && basedOnURL.length > 0) {
-              $img.attr('data-lrmi-isBasedOnURL', basedOnURL);
-            } else {
-              $img.removeAttr('data-lrmi-isBasedOnURL');
-            }
-            $option = $dialog.find('select#reuse-license :selected');
-            rightsUrl = $option.attr('value');
-            rightsName = $.trim($option.text());
-            if (rightsUrl && rightsUrl.length > 0) {
-              $img.attr('data-lrmi-useRightsURL', rightsUrl);
-            } else {
-              $img.removeAttr('data-lrmi-useRightsURL');
-            }
-            attribution = buildAttribution(creator, publisher, basedOnURL, rightsName);
-            if (attribution && attribution.length > 0) {
-              $img.attr('data-tbook-permissionText', attribution);
-            } else {
-              $img.removeAttr('data-tbook-permissionText');
-            }
+      $dialog.off('submit').on('submit', function(evt) {
+        var attribution, buildAttribution, editableId, rightsName;
+        evt.preventDefault();
+        buildAttribution = function(creator, publisher, basedOnURL, rightsName) {
+          var attribution, baseOn, baseOnEscaped;
+          attribution = "";
+          if (creator && creator.length > 0) {
+            attribution += "Image by " + creator + ".";
+          }
+          if (publisher && publisher.length > 0) {
+            attribution += "Published by " + publisher + ".";
+          }
+          if (basedOnURL && basedOnURL.length > 0) {
+            baseOn = '<link src="' + basedOnURL + '">Original source</link>.';
+            baseOnEscaped = jQuery('<div />').text(baseOn).html();
+            attribution += baseOn;
+          }
+          if (rightsName && rightsName.length > 0) {
+            attribution += 'License: ' + rightsName + ".";
+          }
+          return attribution;
+        };
+        if ($dialog.find('input[value="i-got-permission"]').prop('checked')) {
+          creator = $dialog.find('input#reuse-author').val();
+          if (creator && creator.length > 0) {
+            $img.attr('data-lrmi-creator', creator);
           } else {
             $img.removeAttr('data-lrmi-creator');
+          }
+          publisher = $dialog.find('input#reuse-org').val();
+          if (publisher && publisher.length > 0) {
+            $img.attr('data-lrmi-publisher', publisher);
+          } else {
             $img.removeAttr('data-lrmi-publisher');
+          }
+          basedOnURL = $dialog.find('input#reuse-url').val();
+          if (basedOnURL && basedOnURL.length > 0) {
+            $img.attr('data-lrmi-isBasedOnURL', basedOnURL);
+          } else {
             $img.removeAttr('data-lrmi-isBasedOnURL');
+          }
+          $option = $dialog.find('select#reuse-license :selected');
+          rightsUrl = $option.attr('value');
+          rightsName = $.trim($option.text());
+          if (rightsUrl && rightsUrl.length > 0) {
+            $img.attr('data-lrmi-useRightsURL', rightsUrl);
+          } else {
             $img.removeAttr('data-lrmi-useRightsURL');
+          }
+          attribution = buildAttribution(creator, publisher, basedOnURL, rightsName);
+          if (attribution && attribution.length > 0) {
+            $img.attr('data-tbook-permissionText', attribution);
+          } else {
             $img.removeAttr('data-tbook-permissionText');
           }
-          deferred.resolve({
-            target: $img[0]
-          });
-          $figure.removeClass('aloha-ephemera');
-          editableId = $figure.parents('.aloha-editable').last().attr('id');
-          return Aloha.getEditableById(editableId).smartContentChange({
-            type: 'block-change'
-          });
-        };
-      })(this));
-      $dialog.off('click').on('click', '.btn.action.cancel', (function(_this) {
-        return function(evt) {
-          evt.preventDefault();
-          if (!editing) {
-            $img.parents('.semantic-container').remove();
-          }
-          deferred.reject({
-            target: $img[0],
-            editing: editing
-          });
-          return $dialog.modal('hide');
-        };
-      })(this));
+        } else {
+          $img.removeAttr('data-lrmi-creator');
+          $img.removeAttr('data-lrmi-publisher');
+          $img.removeAttr('data-lrmi-isBasedOnURL');
+          $img.removeAttr('data-lrmi-useRightsURL');
+          $img.removeAttr('data-tbook-permissionText');
+        }
+        editableId = $img.parents('.aloha-editable').last().attr('id');
+        Aloha.getEditableById(editableId).smartContentChange({
+          type: 'block-change'
+        });
+        deferred.resolve($img);
+        return $dialog.modal('hide');
+      });
+      $dialog.off('click').on('click', '.btn.action.cancel', function(evt) {
+        evt.preventDefault();
+        deferred.reject($img);
+        return $dialog.modal('hide');
+      });
+      $dialog.modal({
+        show: true
+      });
       return deferred.promise();
     };
     insertImage = function() {
-      var $dialog, $figure, $img, blob, newEl, promise, source_this_image_dialog, template;
-      template = $('<figure class="figure aloha-ephemera"><div class="title" /><img /><figcaption /></figure>');
-      semanticBlock.insertAtCursor(template);
-      newEl = template.find('img');
-      blob = showModalDialog(newEl);
-      promise = blob.promise;
-      $figure = blob.figure;
-      $img = blob.img;
-      $dialog = blob.dialog;
-      promise.show();
-      source_this_image_dialog = (function(_this) {
-        return function() {
-          var editing;
-          editing = false;
-          return showModalDialog2($figure, $img, $dialog, editing);
-        };
-      })(this);
-      promise.then((function(_this) {
-        return function(data) {
-          if (data.files.length) {
-            newEl.addClass('aloha-image-uploading');
-            return _this.uploadImage(data.files[0], newEl, function(status, url) {
-              if (status === 413) {
-                alert('The file is too large. Please upload a smaller one');
-              } else if (url) {
-                jQuery(data.target).attr('src', url);
-              }
-              return newEl.removeClass('aloha-image-uploading');
-            });
-          }
-        };
-      })(this)).then(source_this_image_dialog).then((function(_this) {
-        return function() {
-          return $dialog.modal('hide');
-        };
-      })(this)).fail((function(_this) {
-        return function(data) {
-          if (!data.editing) {
-            return jQuery(data.target).parents('.semantic-container').remove();
-          }
-        };
-      })(this));
+      var marker;
+      marker = Figure.insertPlaceholder();
+      return showCreateDialog().then(function(image) {
+        Figure.insertOverPlaceholder(image, marker);
+        return showModalDialog2(image);
+      }).fail(function() {
+        return marker.remove();
+      });
     };
     $('body').bind('aloha-image-resize', function() {
-      setWidth(Image.imageObj);
       return Aloha.activeEditable.smartContentChange({
         type: 'block-change'
       });
     });
-    getWidth = function($image) {
-      var image;
-      image = $image.get(0);
-      if (image) {
-        return image.width || image.naturalWidth;
+    setThankYou = function($img) {
+      var editDiv, wrapper;
+      wrapper = $img.parents('.image-wrapper').first();
+      if (!wrapper.length) {
+        return;
       }
-      return 0;
-    };
-    setWidth = function(image) {
-      var wrapper;
-      wrapper = image.parents('.image-wrapper');
-      if (wrapper.length) {
-        return wrapper.width(Math.min(getWidth(image), wrapper.parent().innerWidth() - 50));
-      }
-    };
-    setThankYou = function(wrapper) {
-      var editDiv;
       editDiv = wrapper.children('.image-edit');
       editDiv.html('<i class="fa fa-edit icon-edit"></i> Thank You!').removeClass('passive');
       editDiv.addClass('thank-you');
       return editDiv.animate({
         opacity: 0
       }, 2000, 'swing', function() {
-        return setEditText(wrapper);
+        return setEditText($img);
       });
     };
-    setEditText = function(wrapper) {
-      var alt, editDiv;
+    setEditText = function($img) {
+      var alt, editDiv, wrapper;
+      wrapper = $img.parents('.image-wrapper').first();
+      if (!wrapper.length) {
+        return;
+      }
       alt = wrapper.children('img').attr('alt');
       editDiv = wrapper.children('.image-edit').removeClass('thank-you').css('opacity', 1);
       if (alt) {
@@ -58718,41 +59475,14 @@ define('css!assorted/css/image',[],function(){});
         });
       }
     };
-    activate = function(element) {
-      var $caption, $img, edit, wrapper;
-      $img = element.find('img');
+    initialize = function($img) {
+      var edit, wrapper;
       wrapper = $('<div class="image-wrapper aloha-ephemera-wrapper">');
       edit = $('<div class="image-edit aloha-ephemera">');
-      $img.wrap(wrapper);
-      setWidth($img);
-      if (!element.find('.title').length) {
-        element.prepend('<div class="title"></div>');
-      }
-      if (!element.find('figcaption').length) {
-        element.append('<figcaption></figcaption>');
-      }
-      $caption = element.find('figcaption');
-      $caption.aloha();
-      setEditText(element.find('.image-wrapper').prepend(edit));
-      $img.one('load', function() {
-        return setWidth($(this));
-      }).each(function() {
-        if (this.complete) {
-          return $(this).load();
-        }
-      });
-      return element.find('img').load(function() {
-        return setWidth($(this));
-      });
+      $img.wrap(wrapper).parent().prepend(edit);
+      return setEditText($img);
     };
-    deactivate = function(element) {};
     return AlohaPlugin.create('oer-image', {
-      getLabel: function() {
-        return 'Image';
-      },
-      activate: activate,
-      deactivate: deactivate,
-      selector: 'figure',
       init: function() {
         var plugin;
         plugin = this;
@@ -58761,21 +59491,15 @@ define('css!assorted/css/image',[],function(){});
             return insertImage.bind(plugin)(e);
           }
         });
-        semanticBlock.register(this);
-        semanticBlock.registerEvent('click', '.aloha-oer-block .image-edit', function() {
-          var $dialog, $figure, $img, blob, img, promise;
-          img = $(this).siblings('img');
-          blob = showModalDialog(img);
-          promise = blob.promise;
-          $dialog = blob.dialog;
-          $figure = blob.figure;
-          $img = blob.img;
-          promise.show('Edit image');
-          promise.then((function(_this) {
-            return function(data) {
-              return $dialog.modal('hide');
-            };
-          })(this));
+        $(document).on('mouseover', 'img', function() {
+          if (!$(this).parent().is('.image-wrapper') && $(this).parents('.aloha-root-editable').length) {
+            return initialize($(this));
+          }
+        });
+        return $(document).on('click', 'figure.aloha-oer-block .image-edit', function() {
+          var $img;
+          $img = $(this).siblings('img');
+          return showEditDialog($img);
         });
       },
       uploadImage: function(file, el, callback) {
@@ -58811,146 +59535,16 @@ define('css!assorted/css/image',[],function(){});
 
 }).call(this);
 
-// Generated by CoffeeScript 1.7.1
-(function() {
-  define('assorted/figure',['aloha', 'jquery', 'aloha/console'], function(Aloha, jQuery, console) {
-    var populator, selector;
-    selector = 'figure';
-    populator = function($el) {
-      var $bubble, $button, separator;
-      $bubble = jQuery('<div class="figure-popover btn-group"></div>');
-      if (!$el.children('.title:not(.empty)')[0]) {
-        $button = jQuery('<button class="btn">Add Title</button>');
-        $button.on('mousedown', function() {
-          var newTitle;
-          newTitle = jQuery('<div class="title aloha-optional aloha-empty">Insert Title Here</div>');
-          return $el.prepend(newTitle);
-        });
-        $bubble.append($button);
-      }
-      separator = jQuery('<span class="divider"></span>');
-      $bubble.append(separator);
-      if (!$el.children('figcaption:not(.empty)')[0]) {
-        $button = jQuery('<button class="btn">Add Caption</button>');
-        $button.on('mousedown', function() {
-          var newCaption;
-          newCaption = jQuery('<figcaption class="aloha-optional aloha-empty">Insert Caption Here</figcaption>');
-          return $el.append(newCaption);
-        });
-        $bubble.append($button);
-      }
-      $bubble.append('<button class="btn"><i class="fa fa-certificate icon-certificate"></i> Advanced Options</button>');
-      return $bubble;
-    };
-    return {
-      hover: true,
-      selector: selector,
-      populator: populator
-    };
-  });
+// Generated by CoffeeScript 1.5.0
 
-}).call(this);
-
-
-define('css!assorted/title-figcaption',[],function(){});
-// Generated by CoffeeScript 1.7.1
-(function() {
-  define('assorted/title-figcaption',['aloha', 'jquery', 'aloha/console', 'css!./title-figcaption.css'], function(Aloha, jQuery, console) {
-    var buildTitle, populator, selector;
-    buildTitle = function($el, content) {
-      if (content == null) {
-        content = null;
-      }
-      $el.text('');
-      if (content && content[0]) {
-        return $el.append(content);
-      } else {
-        return $el.addClass('empty');
-      }
-    };
-    selector = '.title,figcaption';
-    populator = function($el) {
-      var $bubble, deleteBtn, editable;
-      editable = Aloha.activeEditable;
-      $bubble = jQuery('<button class="btn btn-danger"><i class="fa fa-times icon-remove icon-white"></i> Remove</button>');
-      deleteBtn = $bubble.on('click', function() {
-        $el.text('');
-        $el.removeClass('focus');
-        return $el.addClass('empty');
-      });
-      return $bubble;
-    };
-    return {
-      hover: true,
-      selector: selector,
-      populator: populator,
-      placement: 'right',
-      focus: function() {
-        var $el;
-        $el = jQuery(this);
-        $el.addClass('focus');
-        return $el.removeClass('empty');
-      },
-      blur: function() {
-        var $el;
-        $el = jQuery(this);
-        $el.removeClass('focus');
-        if (!$el.text()) {
-          return $el.addClass('empty');
-        }
-      }
-    };
-  });
-
-}).call(this);
-
-// Generated by CoffeeScript 1.3.3
-(function() {
-
-  define('assorted/list',['aloha', 'jquery', 'ui/ui', 'PubSub'], function(Aloha, $, Ui, PubSub) {
-    return Aloha.require(['list/list-plugin'], function(ListPlugin) {
-      Aloha.bind('aloha-editable-created', function() {
-        ListPlugin._indentListButton.enable(false);
-        return ListPlugin._outdentListButton.enable(false);
-      });
-      return PubSub.sub('aloha.selection.context-change', function(message) {
-        var $item, depth, effectiveMarkup, rangeObject, _i, _len, _ref, _results;
-        rangeObject = message.range;
-        _ref = rangeObject.markupEffectiveAtStart;
-        _results = [];
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          effectiveMarkup = _ref[_i];
-          if (Aloha.Selection.standardTagNameComparator(effectiveMarkup, jQuery('<ul></ul>')) || Aloha.Selection.standardTagNameComparator(effectiveMarkup, jQuery('<ol></ol>'))) {
-            depth = $(rangeObject.commonAncestorContainer).parentsUntil(Aloha.activeEditable.obj, 'li').andSelf().length;
-            $item = jQuery(rangeObject.commonAncestorContainer);
-            if ($item.is('li') && $item.index() > 0) {
-              ListPlugin._indentListButton.enable(true);
-            }
-            if (depth > 1) {
-              _results.push(ListPlugin._outdentListButton.enable(true));
-            } else {
-              _results.push(void 0);
-            }
-          } else {
-            ListPlugin._indentListButton.enable(false);
-            _results.push(ListPlugin._outdentListButton.enable(false));
-          }
-        }
-        return _results;
-      });
-    });
-  });
-
-}).call(this);
-
-// Generated by CoffeeScript 1.6.3
 /*
 Register a couple of assorted oer plugins
 */
 
 
 (function() {
-  define('assorted/assorted-plugin',['aloha/plugin', 'jquery', 'overlay/overlay-plugin', './link', './image', './figure', './title-figcaption', './list'], function(Plugin, $, Popover, linkConfig, imageConfig, figureConfig, figcaptionConfig) {
+
+  define('assorted/assorted-plugin',['aloha/plugin', 'jquery', 'overlay/overlay-plugin', './link', './image'], function(Plugin, $, Popover, linkConfig, imageConfig) {
     return Plugin.create('assorted', {
       defaultSettings: {
         image: {
@@ -59237,13 +59831,13 @@ Register a couple of assorted oer plugins
 
 
 define('css!math/css/math',[],function(){});
-// Generated by CoffeeScript 1.7.1
+// Generated by CoffeeScript 1.5.0
 (function() {
   var __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
   define('math/math-plugin',['aloha', 'aloha/plugin', 'jquery', 'overlay/overlay-plugin', 'ui/ui', 'copy/copy-plugin', 'css!math/css/math.css'], function(Aloha, Plugin, jQuery, Popover, UI, Copy) {
     var $_editor, EDITOR_HTML, LANGUAGES, MATHML_ANNOTATION_MIME_ENCODINGS, MATHML_ANNOTATION_NONMIME_ENCODINGS, TOOLTIP_TEMPLATE, addAnnotation, buildEditor, cleanupFormula, findFormula, getEncoding, getMathFor, insertMath, insertMathInto, makeCloseIcon, ob, placeCursorAfter, squirrelMath, triggerMathJax;
-    EDITOR_HTML = '<div class="math-editor-dialog">\n    <div class="math-container">\n        <pre><span></span><br></pre>\n        <textarea type="text" class="formula" rows="1"\n                  placeholder="Insert your math notation here"></textarea>\n    </div>\n    <div class="footer">\n      <span>This is:</span>\n      <label class="radio inline">\n          <input type="radio" name="mime-type" value="math/asciimath"> ASCIIMath\n      </label>\n      <label class="radio inline">\n          <input type="radio" name="mime-type" value="math/tex"> LaTeX\n      </label>\n      <label class="radio inline mime-type-mathml">\n          <input type="radio" name="mime-type" value="math/mml"> MathML\n      </label>\n      <label class="plaintext-label radio inline">\n          <input type="radio" name="mime-type" value="text/plain"> Plain text\n      </label>\n      <button class="btn btn-primary done">Done</button>\n      <button class="btn copy">Copy</button>\n    </div>\n</div>';
+    EDITOR_HTML = '<div class="math-editor-dialog">\n    <div class="math-container">\n        <pre><span></span><br></pre>\n        <textarea type="text" class="formula" rows="1"\n                  placeholder="Insert your math notation here"></textarea>\n    </div>\n    <div class="footer controls form-inline">\n      <span>This is:</span>\n      <label class="radio inline">\n          <input type="radio" name="mime-type" value="math/asciimath"> ASCIIMath\n      </label>\n      <label class="radio inline">\n          <input type="radio" name="mime-type" value="math/tex"> LaTeX\n      </label>\n      <label class="radio inline mime-type-mathml">\n          <input type="radio" name="mime-type" value="math/mml"> MathML\n      </label>\n      <label class="plaintext-label radio inline">\n          <input type="radio" name="mime-type" value="text/plain"> Plain text\n      </label>\n      <button class="btn btn-default clear">Clear</button>\n      <button class="btn btn-default copy">Copy</button>\n      <button class="btn btn-primary done">Done</button>\n    </div>\n</div>';
     $_editor = jQuery(EDITOR_HTML);
     LANGUAGES = {
       'math/asciimath': {
@@ -59472,28 +60066,26 @@ define('css!math/css/math',[],function(){});
       }
     };
     buildEditor = function($span) {
-      var $editor, $formula, formula, keyDelay, keyTimeout, mimeType, radios;
+      var $editor, $formula, formula, keyDelay, keyTimeout, mimeType, radios,
+        _this = this;
       $editor = $_editor.clone(true);
       if ($span.find('.mathjax-wrapper > *').length === 0) {
         $editor.find('.plaintext-label').remove();
       }
-      $editor.find('.done').on('click', (function(_this) {
-        return function() {
-          $span.popover('hide');
-          return placeCursorAfter($span);
-        };
-      })(this));
-      $editor.find('.remove').on('click', (function(_this) {
-        return function() {
-          $span.popover('hide');
-          return cleanupFormula($editor, $span, true);
-        };
-      })(this));
-      $editor.find('.copy').on('click', (function(_this) {
-        return function() {
-          return Copy.buffer($span.outerHtml(), 'text/oerpub-content');
-        };
-      })(this));
+      $editor.find('.done').on('click', function() {
+        $span.popover('hide');
+        return placeCursorAfter($span);
+      });
+      $editor.find('.remove').on('click', function() {
+        $span.popover('hide');
+        return cleanupFormula($editor, $span, true);
+      });
+      $editor.find('.copy').on('click', function() {
+        return Copy.buffer($span.outerHtml(), 'text/oerpub-content');
+      });
+      $editor.find('.clear').on('click', function() {
+        return $editor.find('.formula').val('');
+      });
       $formula = $editor.find('.formula');
       mimeType = $span.find('script[type]').attr('type') || 'math/tex';
       mimeType = mimeType.split(';')[0];
@@ -59698,17 +60290,22 @@ define('css!math/css/math',[],function(){});
 
 
 define('css!note/css/note-plugin',[],function(){});
-// Generated by CoffeeScript 1.3.3
+// Generated by CoffeeScript 1.5.0
 (function() {
 
   define('note/note-plugin',['aloha', 'aloha/plugin', 'jquery', 'aloha/ephemera', 'ui/ui', 'ui/button', 'semanticblock/semanticblock-plugin', 'css!note/css/note-plugin.css'], function(Aloha, Plugin, jQuery, Ephemera, UI, Button, semanticBlock) {
     var TYPE_CONTAINER, notishClasses, types;
-    TYPE_CONTAINER = jQuery('<span class="type-container dropdown aloha-ephemera">\n    <span class="type-dropdown btn-link" data-toggle="dropdown"><span class="caret"></span></span>\n    <ul class="dropdown-menu">\n    </ul>\n</span>');
+    TYPE_CONTAINER = jQuery('<span class="type-container dropdown aloha-ephemera">\n    <span class="type-dropdown btn-link" data-toggle="dropdown"><span class="caret"></span><span class="type"></span></span>\n    <ul class="dropdown-menu">\n    </ul>\n</span>');
     notishClasses = {};
     types = [];
     return Plugin.create('note', {
       defaults: [
         {
+          label: 'Note2',
+          typeClass: 'note',
+          dataClass: 'note2',
+          hasTitle: true
+        }, {
           label: 'Note',
           typeClass: 'note',
           hasTitle: true
@@ -59745,7 +60342,7 @@ define('css!note/css/note-plugin',[],function(){});
                 $option.appendTo(typeContainer.find('.dropdown-menu'));
                 $option = $option.children('span');
                 $option.text(dropType.label);
-                typeContainer.find('.type').on('click', function() {
+                typeContainer.find('.type-dropdown').on('click', function() {
                   return jQuery.each(types, function(i, dropType) {
                     if ($element.attr('data-label') === dropType.dataClass) {
                       return typeContainer.find('.dropdown-menu li').each(function(i, li) {
@@ -59773,6 +60370,7 @@ define('css!note/css/note-plugin',[],function(){});
                   } else {
                     $element.removeAttr('data-label');
                   }
+                  typeContainer.find('.type').text(dropType.label);
                   for (key in notishClasses) {
                     $element.removeClass(key);
                   }
@@ -59980,12 +60578,12 @@ define('css!equation/css/equation-plugin',[],function(){});
 
 
 define('css!example/css/example-plugin',[],function(){});
-// Generated by CoffeeScript 1.3.3
+// Generated by CoffeeScript 1.5.0
 (function() {
 
   define('example/example-plugin',['aloha', 'aloha/plugin', 'jquery', 'aloha/ephemera', 'ui/ui', 'ui/button', 'semanticblock/semanticblock-plugin', 'css!example/css/example-plugin.css'], function(Aloha, Plugin, jQuery, Ephemera, UI, Button, semanticBlock) {
     var TYPE_CONTAINER, exampleishClasses, types;
-    TYPE_CONTAINER = jQuery('<span class="type-container dropdown aloha-ephemera">\n    <span class="type-dropdown btn-link" data-toggle="dropdown"><span class="caret"></span></span>\n    <ul class="dropdown-menu">\n    </ul>\n</span>');
+    TYPE_CONTAINER = jQuery('<span class="type-container dropdown aloha-ephemera">\n    <span class="type-dropdown btn-link" data-toggle="dropdown"><span class="caret"></span><span class="type"></span></span>\n    <ul class="dropdown-menu">\n    </ul>\n</span>');
     exampleishClasses = {};
     types = [];
     return Plugin.create('example', {
@@ -60055,7 +60653,7 @@ define('css!example/css/example-plugin',[],function(){});
                 $option.appendTo(typeContainer.find('.dropdown-menu'));
                 $option = $option.children('a');
                 $option.text(dropType.label);
-                typeContainer.find('.type').on('click', function() {
+                typeContainer.find('.type-dropdown').on('click', function() {
                   return jQuery.each(types, function(i, dropType) {
                     if ($element.attr('data-label') === dropType.dataClass) {
                       return typeContainer.find('.dropdown-menu li').each(function(i, li) {
@@ -60079,6 +60677,7 @@ define('css!example/css/example-plugin',[],function(){});
                   } else {
                     $element.children('.title').remove();
                   }
+                  typeContainer.find('.type').text(dropType.label);
                   if (dropType.dataClass) {
                     $element.attr('data-label', dropType.dataClass);
                   } else {
@@ -60094,6 +60693,7 @@ define('css!example/css/example-plugin',[],function(){});
               typeContainer.find('.dropdown-menu').remove();
               typeContainer.find('.type').removeAttr('data-toggle');
             }
+            typeContainer.find('.type').text(type.label);
             return typeContainer.prependTo($element);
           }
         });
@@ -60184,9 +60784,168 @@ define('css!example/css/example-plugin',[],function(){});
 }).call(this);
 
 
-define('css!mathcheatsheet/css/mathcheatsheet',[],function(){});
-// Generated by CoffeeScript 1.6.3
+define('css!exercise/css/exercise-plugin',[],function(){});
+// Generated by CoffeeScript 1.5.0
 (function() {
+
+  define('exercise/exercise-plugin',['aloha', 'aloha/plugin', 'jquery', 'aloha/ephemera', 'ui/ui', 'ui/button', 'semanticblock/semanticblock-plugin', 'css!exercise/css/exercise-plugin.css'], function(Aloha, Plugin, jQuery, Ephemera, UI, Button, semanticBlock) {
+    var SOLUTION_TEMPLATE, SOLUTION_TYPE_CONTAINER, TEMPLATE, TYPE_CONTAINER, activateExercise, activateSolution, deactivateExercise, deactivateSolution;
+    TEMPLATE = '<div class="exercise">\n    <div class="problem"></div>\n</div>';
+    SOLUTION_TEMPLATE = '<div class="solution">\n</div>';
+    TYPE_CONTAINER = '<div class="type-container dropdown aloha-ephemera">\n    <span class="type-dropdown btn-link" data-toggle="dropdown"><span class="caret"></span><span class="type"></span></span>\n    <ul class="dropdown-menu">\n        <li><span class="btn-link" data-label="">Exercise</span></li>\n        <li><span class="btn-link" data-label="homework">Homework</span></li>\n        <li><span class="btn-link" data-label="problem">Problem</span></li>\n        <li><span class="btn-link" data-label="question">Question</span></li>\n        <li><span class="btn-link" data-label="task">Task</span></li>\n        <li><span class="btn-link" data-label="Worked Example">Worked Example</span></li>\n    </ul>\n</div>';
+    SOLUTION_TYPE_CONTAINER = '<div class="type-container dropdown aloha-ephemera">\n    <span class="type btn-link" data-toggle="dropdown"></span>\n    <ul class="dropdown-menu">\n        <li><span class="btn-link" data-label="answer">Answer</span></li>\n        <li><span class="btn-link" data-label="solution">Solution</span></li>\n    </ul>\n</div>';
+    activateExercise = function($element) {
+      var $content, $problem, $problemContainer, $solutions, $typeContainer, type,
+        _this = this;
+      type = $element.attr('data-label') || 'exercise';
+      $problem = $element.children('.problem');
+      $solutions = $element.children('.solution');
+      $element.children().not($problem).not($solutions).remove();
+      $problemContainer = $problem.add($solutions).wrapAll('<section class="js-problem-container aloha-ephemera-wrapper"></section>').parent();
+      $typeContainer = jQuery(TYPE_CONTAINER);
+      $typeContainer.find('.type').text(type.charAt(0).toUpperCase() + type.slice(1));
+      $typeContainer.find('.dropdown-menu li').each(function(i, li) {
+        if (jQuery(li).children('span').data('type') === type) {
+          return jQuery(li).addClass('checked');
+        }
+      });
+      $typeContainer.prependTo($element);
+      $content = $problem.contents();
+      $problem.empty().addClass('aloha-block-dropzone').attr('placeholder', "Type the text of your problem here.").aloha().append($content);
+      jQuery('<div>').addClass('solutions').addClass('aloha-ephemera-wrapper').appendTo($problemContainer).append($solutions);
+      jQuery('<div>').addClass('solution-controls').addClass('aloha-ephemera').append('<span class="add-solution btn-link">Click here to add an answer/solution</span>').append('<span class="solution-toggle">hide solution</span>').appendTo($element);
+      if (!$solutions.length) {
+        return $element.children('.solution-controls').children('.solution-toggle').hide();
+      }
+    };
+    deactivateExercise = function($element) {};
+    activateSolution = function($element) {
+      var $body, $typeContainer, type,
+        _this = this;
+      type = $element.attr('data-label') || 'solution';
+      $element.contents().filter(function(i, child) {
+        return child.nodeType === 3 && child.data.trim().length;
+      }).wrap('<p></p>');
+      $body = '';
+      if ($element.text().trim().length) {
+        $body = $element.children();
+      }
+      $typeContainer = jQuery(SOLUTION_TYPE_CONTAINER);
+      $typeContainer.find('.type').text(type.charAt(0).toUpperCase() + type.slice(1));
+      $typeContainer.find('.dropdown-menu li').each(function(i, li) {
+        if (jQuery(li).children('a').text().toLowerCase() === type) {
+          return jQuery(li).addClass('checked');
+        }
+      });
+      $typeContainer.prependTo($element);
+      return jQuery('<div>').addClass('body').addClass('aloha-ephemera-wrapper').addClass('aloha-block-dropzone').appendTo($element).aloha().append($body);
+    };
+    deactivateSolution = function($element) {
+      if ($element.children('.body').children().length) {
+        $element.children(':not(.body)').remove();
+        $element.children('.body').contents().unwrap();
+      }
+      $element.children('.body').remove();
+      return $element.contents().filter(function(i, child) {
+        return child.nodeType === 3 && child.data.trim().length;
+      }).wrap('<p></p>');
+    };
+    return Plugin.create('exercise', {
+      getLabel: function($element) {
+        if ($element.is('.exercise')) {
+          return 'Exercise';
+        } else if ($element.is('.solution')) {
+          return 'Solution';
+        }
+      },
+      activate: function($element) {
+        if ($element.is('.exercise')) {
+          return activateExercise($element);
+        } else if ($element.is('.solution')) {
+          return activateSolution($element);
+        }
+      },
+      deactivate: function($element) {
+        if ($element.is('.exercise')) {
+          return deactivateExercise($element);
+        } else if ($element.is('.solution')) {
+          return deactivateSolution($element);
+        }
+      },
+      appendTo: function(target) {
+        return semanticBlock.appendElement(jQuery(TEMPLATE), target);
+      },
+      selector: '.exercise,.solution',
+      ignore: '.problem',
+      options: function($el) {
+        if ($el.is('.solution')) {
+          return {
+            buttons: ['settings']
+          };
+        }
+        return {
+          buttons: ['settings', 'copy']
+        };
+      },
+      init: function() {
+        semanticBlock.register(this);
+        UI.adopt('insertExercise', Button, {
+          click: function() {
+            return semanticBlock.insertAtCursor(TEMPLATE);
+          }
+        });
+        semanticBlock.registerEvent('click', '.exercise .solution-controls .add-solution', function() {
+          var controls, exercise;
+          exercise = jQuery(this).parents('.exercise').first();
+          controls = exercise.children('.solution-controls');
+          controls.children('.solution-toggle').text('hide solution').show();
+          return semanticBlock.appendElement(jQuery(SOLUTION_TEMPLATE), exercise.find('.solutions'));
+        });
+        semanticBlock.registerEvent('click', '.exercise .solution-controls .solution-toggle', function() {
+          var controls, exercise, solutions;
+          exercise = jQuery(this).parents('.exercise').first();
+          controls = exercise.children('.solution-controls');
+          solutions = exercise.children('.solutions');
+          return solutions.slideToggle(function() {
+            if (solutions.is(':visible')) {
+              return controls.children('.solution-toggle').text('hide solution');
+            } else {
+              return controls.children('.solution-toggle').text('show solution');
+            }
+          });
+        });
+        semanticBlock.registerEvent('click', '.exercise .semantic-delete', function() {
+          var controls, exercise;
+          exercise = jQuery(this).parents('.exercise').first();
+          controls = exercise.children('.solution-controls');
+          controls.children('.add-solution').show();
+          if (exercise.children('.solutions').children().length === 1) {
+            return controls.children('.solution-toggle').hide();
+          }
+        });
+        return semanticBlock.registerEvent('click', '.aloha-oer-block.solution > .type-container > ul > li > *,\
+                                              .aloha-oer-block.exercise > .type-container > ul > li > *', function(e) {
+          var $el,
+            _this = this;
+          $el = jQuery(this);
+          $el.parents('.type-container').first().find('.type').text($el.text());
+          $el.parents('.aloha-oer-block').first().attr('data-label', $el.data('type'));
+          $el.parents('.type-container').find('.dropdown-menu li').each(function(i, li) {
+            return jQuery(li).removeClass('checked');
+          });
+          return $el.parents('li').first().addClass('checked');
+        });
+      }
+    });
+  });
+
+}).call(this);
+
+
+define('css!mathcheatsheet/css/mathcheatsheet',[],function(){});
+// Generated by CoffeeScript 1.5.0
+(function() {
+
   define('mathcheatsheet/mathcheatsheet-plugin',['aloha', 'aloha/plugin', 'jquery', 'css!mathcheatsheet/css/mathcheatsheet.css'], function(Aloha, Plugin, $) {
     return Plugin.create("mathcheatsheet", {
       defaultSettings: {},
@@ -60195,7 +60954,7 @@ define('css!mathcheatsheet/css/mathcheatsheet',[],function(){});
         this.settings = $.extend(true, this.defaultSettings, this.settings);
         Aloha.require(['math/math-plugin'], function(MathPlugin) {
           MathPlugin.editor.find('.math-container').before('<div class="math-help-link">\n    <span class="btn-link" title="Help using the math editor">See help</a>\n</div>');
-          MathPlugin.editor.find('.plaintext-label').after('<label class="cheatsheet-label checkbox inline">\n    <input id="cheatsheet-activator" type="checkbox" name="cheatsheet-activator"> Show cheat sheet\n</label>');
+          MathPlugin.editor.find('.footer').after('<label class="cheatsheet-label checkbox inline">\n    <input id="cheatsheet-activator" type="checkbox" name="cheatsheet-activator"> Show cheat sheet\n</label>');
           MathPlugin.editor.find('#cheatsheet-activator').on('change', function(e) {
             if (jQuery(e.target).is(':checked')) {
               return jQuery('#math-cheatsheet').trigger("show");
@@ -60276,6 +61035,78 @@ define('css!mathcheatsheet/css/mathcheatsheet',[],function(){});
       },
       toString: function() {
         return "mathcheatsheet";
+      }
+    });
+  });
+
+}).call(this);
+
+
+define('css!multipart/css/multipart-plugin',[],function(){});
+// Generated by CoffeeScript 1.6.3
+(function() {
+  define('multipart/multipart-plugin',['aloha', 'aloha/plugin', 'jquery', 'aloha/ephemera', 'ui/ui', 'ui/button', 'exercise/exercise-plugin', 'semanticblock/semanticblock-plugin', 'css!multipart/css/multipart-plugin.css'], function(Aloha, Plugin, jQuery, Ephemera, UI, Button, Exercise, semanticBlock) {
+    var TEMPLATE, TYPE_CONTAINER, activate, deactivate;
+    TEMPLATE = '<div class="multipart">\n    <div class="body"></div>\n</div>';
+    TYPE_CONTAINER = '<div class="type-container dropdown aloha-ephemera">\n    <span class="type btn-link" data-toggle="dropdown"></span>\n    <ul class="dropdown-menu">\n        <li><span class="btn-link" data-type="Worked Example">Worked Example</span></li>\n        <li><span class="btn-link" data-type="homework">Homework</span></li>\n        <li><span class="btn-link" data-type="exercise">Exercise</span></li>\n    </ul>\n</div>';
+    activate = function($element) {
+      var $content, $header, $typeContainer, type,
+        _this = this;
+      type = $element.attr('data-type') || 'Worked Example';
+      $typeContainer = jQuery(TYPE_CONTAINER);
+      $typeContainer.find('.type').text(type.charAt(0).toUpperCase() + type.slice(1));
+      $typeContainer.find('.dropdown-menu li').each(function(i, li) {
+        if (jQuery(li).children('span').data('type') === type) {
+          return jQuery(li).addClass('checked');
+        }
+      });
+      $header = $element.children('.header');
+      $content = $header.contents();
+      $header.empty().addClass('aloha-block-dropzone').attr('placeholder', "Type the text of your header here.").aloha().append($content);
+      $typeContainer.prependTo($element);
+      return jQuery('<div>').addClass('exercise-controls').addClass('aloha-ephemera').append('<span class="add-exercise btn-link">Click here to add a part</span>').appendTo($element);
+    };
+    deactivate = function($element) {};
+    return Plugin.create('multipart', {
+      getLabel: function($element) {
+        return 'multipart';
+      },
+      activate: activate,
+      deactivate: deactivate,
+      selector: '.multipart,.problemset',
+      ignore: '.multipart > .header,.problemset > .header',
+      init: function() {
+        var multipart;
+        multipart = this;
+        semanticBlock.register(this);
+        UI.adopt('insertMultipart', Button, {
+          click: function() {
+            return semanticBlock.insertAtCursor(TEMPLATE);
+          }
+        });
+        semanticBlock.registerEvent('click', '.multipart .exercise-controls .add-exercise,\
+                                              .problemset .exercise-controls .add-exercise', function() {
+          var parent;
+          parent = jQuery(this).parents(multipart.selector).first();
+          console.log(multipart.selector, parent);
+          Exercise.appendTo(parent);
+          return jQuery(this).parents('.exercise-controls').appendTo(parent);
+        });
+        return semanticBlock.registerEvent('click', '.multipart > .type-container > ul > li > *,\
+                                              .problemset > .type-container > ul > li > *', function(e) {
+          var $el,
+            _this = this;
+          $el = jQuery(this);
+          $el.parents('.type-container').first().children('.type').text($el.text());
+          $el.parents('.aloha-oer-block').first().attr('data-type', $el.data('type'));
+          $el.parents('aloha-oer-block').first().children('.exercise').each(function() {
+            return jQuery(this).attr('data-type', $el.data('type'));
+          });
+          $el.parents('.type-container').find('.dropdown-menu li').each(function(i, li) {
+            return jQuery(li).removeClass('checked');
+          });
+          return $el.parents('li').first().addClass('checked');
+        });
       }
     });
   });

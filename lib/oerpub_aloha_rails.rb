@@ -1,3 +1,4 @@
+require 'oerpub/aloha/rails/engine'
 require 'oerpub/aloha/rails/view'
 
 module Oerpub

@@ -3,7 +3,7 @@ module Oerpub
     module Rails
       module View
 
-        def oerpub_aloha_rails(selector)
+        def oerpub_aloha(selector)
           render :partial => 'oerpub/aloha/rails/embed',
                  :locals => { :selector => selector }
         end
