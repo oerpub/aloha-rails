@@ -1,0 +1,10 @@
+<% # Clients of this partial must provide the following variable:
+   # selector %>
+
+<%= render :partial => 'oerpub/aloha/rails/cnx-editbar' %>
+
+<script type='text/javascript'>
+  Aloha.ready( function() {
+    Aloha.jQuery(<%= selector %>).aloha();
+  });
+</script>

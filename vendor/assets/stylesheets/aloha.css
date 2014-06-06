@@ -1,0 +1,907 @@
+.aloha.popover button {
+    border: 1px;
+    padding: 4px 12px;
+}
+
+.aloha.popover label {
+    font-weight: bold;
+    padding-left: 20px;
+}
+
+.aloha.popover .popover-content {
+    padding: 9px 14px;
+}
+/*
+ * CSSS to style the Edit LInk dialog box,
+ * as defined in bubble/link
+ */
+
+/* hide future features */
+
+#link-destination {
+  display: none;
+}
+
+
+/* style the  Edit LInk dialog box */
+
+/* For some reason all modals have this id. */
+#linkModal {
+  height: auto;
+}
+
+#link-contents {
+  width: 500px;
+}
+
+#link-external {
+  width: 500px;
+}
+
+#link-text label {
+  font-weight: normal;
+}
+
+#link-tab-external label {
+  font-weight: normal;
+}
+
+/* style the link popover */
+
+.link-popover {
+  width: auto;
+  min-width: 236px; /* bootstrap's default popover width */
+  max-width: none; /* override bootstrap default so that the link options don't wrap */
+}
+
+.link-popover-details .edit-link,
+.link-popover-details .delete-link,
+.link-popover-details .visit-link {
+  white-space: nowrap;
+}
+
+.aloha.popover .link-popover-details button, .visit-link{
+  padding: 0 10px;
+}
+
+/* Add a separator after the 1st 2 buttons */
+.aloha.popover button.edit-link,
+.aloha.popover button.delete-link {
+  border-right: 1px solid #bbb;
+}
+
+i.icon-edit-link {
+  background-image: url(plugins/oer/assorted/img/edit-link.png);
+  /* Override bootstraps' glyphicons rule [class^="icon-"], [class*=" icon-"] */
+  background-position: 0 0;
+}
+
+i.icon-delete-link {
+  background-image: url(plugins/oer/assorted/img/delete-link.png);
+  background-position: 0 0;
+}
+i.icon-external-link {
+/* commenting out for now since it's conflicting with .icon-external-link:before's image
+  background-image: url(plugins/oer/assorted/img/external-link.png);
+  background-position: 0 0;
+*/
+}
+div.copy-section-controls {
+    display: none;
+    float: right;
+}
+
+div.copy-section-controls span.copy-section {
+    color: #666666;
+    font-size: 11px;
+    margin: 0 0.5em;
+    cursor: pointer;
+    font-weight: normal;
+    letter-spacing: normal;
+}
+div.copy-section-controls span.copy-section .icon-copy:before {
+    font-size: 12px;
+}
+
+h1:hover div.copy-section-controls,
+h2:hover div.copy-section-controls,
+h3:hover div.copy-section-controls {
+    display: inline-block;
+}
+
+div.copy-section-controls span.copy-section:hover {
+    text-decoration: underline;
+    background-color: #F2F2F2;
+}
+/*  Logic for displaying placeholder text.
+    There are 2 cases when placeholder text should become visible:
+    1. If the user is hovering over a semantic element
+    2. If the user is editing a semantic element
+
+    Then, the placeholder text should appear on an element when all of the following occur:
+    - has a `placeholder` attribute
+    - does not contain text
+    - is not currently being edited (no cursor inside)
+
+    The placeholder text is added to the DOM using `:before { content: '...'; }`.
+    This way, the browser does most of the heavy lifting AND the actual text
+    is never part of the DOM for serializing.
+ */
+.semantic-container       *[placeholder]:empty:before {
+    font-weight: normal;
+    content: attr(placeholder);
+    color: #AAA;
+    font-style: italic;
+}
+.semantic-container:hover *[hover-placeholder]:empty:before {
+    font-weight: normal;
+    content: attr(hover-placeholder);
+    color: #AAA;
+    font-style: italic;
+}
+
+.aloha-oer-block-placeholder {
+    background: #C5DAE9;
+    border: 1px dashed #1b86d2;
+    min-height: 50px;
+    margin: 10px 0;
+}
+
+/* Make titles inline so they show up next to the type dropdown if there is one */
+.aloha-oer-block > .title { display: inline-block; }
+
+.semantic-drag-helper {
+    display: block;
+    height: auto !important;
+}
+
+.semantic-container.copy-preview, .semantic-container.copy-preview > .semantic-controls-top {
+    background-color: #F2F2F2;
+}
+.semantic-container.copy-preview .exercise-controls, 
+.semantic-container.copy-preview .solution-controls {
+    display: none !important;
+}
+
+.semantic-container.drag-active {
+    background: #F0F0F0;
+}
+.semantic-container.drag-active .semantic-controls-top, 
+.semantic-container.drag-active .exercise-controls, 
+.semantic-container.drag-active .solution-controls {
+    display: none !important;
+}
+
+.semantic-container.delete-hover {
+    background: #F0F0F0;
+}
+.semantic-container.delete-hover .aloha-oer-block{
+    opacity: 0.3;
+}
+.semantic-container.delete-hover .semantic-controls-top, 
+.semantic-container.delete-hover .exercise-controls, 
+.semantic-container.delete-hover .solution-controls {
+    display: none !important;
+}
+
+.semantic-container {
+    cursor: auto !important; /* override default aloha cursor for blocks */
+    position: relative;
+    padding: 10px 0 10px;
+    margin: 10px 0 10px 0;
+    border: 1px solid transparent;
+    min-height: 15px;
+}
+.semantic-container.focused {
+    border: 1px solid #ccc;
+}
+
+.semantic-container .aloha-block-handle {
+    background-image:
+        linear-gradient(45deg, #C0C0C0 25%, transparent 25%, transparent 75%, #C0C0C0 75%),
+        linear-gradient(45deg, #C0C0C0 25%, transparent 25%, transparent 75%, #C0C0C0 75%);
+    background-position: 0 0, 2px 2px;
+    background-color: #FAFAFA;
+    background-size: 4px 4px;
+    border-radius: 0;
+    border: 1px solid #ccc;
+    height: 12px;
+    width: 50px;
+    margin-left: -25px; /* This will better center the handle, since "left: 50%" starts at the handle's left edge */
+    position: absolute;
+    left: 50%;
+    top: -8px;
+    display: none !important; /* override the default aloha display logic for handles */
+    cursor: -moz-grab !important;
+    cursor: -webkit-grab !important;
+    cursor: url('plugins/oer/semanticblock/css/openhand.cur'), default;
+}
+.semantic-container.aloha-oer-dragging .aloha-block-handle {
+    cursor: -moz-grabbing !important;
+    cursor: -webkit-grabbing !important;
+    cursor: url('plugins/oer/semanticblock/css/closedhand.cur'), default;
+}
+.semantic-container.drag-active .aloha-block-handle {
+    background-color: #F0F0F0;
+}
+.semantic-container.focused > .aloha-block-handle {
+    display: block !important; /* override the default aloha display logic for handles */
+}
+.semantic-container > .aloha-block-handle {
+    display: none !important; /* override the default aloha display logic for handles */
+}
+
+.semantic-container .semantic-controls {
+    border-left: 1px solid #ccc;
+    background: #F5F5F5;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 15px;
+    height: 100%;
+    display: none;
+    text-align: center;
+    line-height: normal;
+}
+.semantic-container.focused > .semantic-controls {
+    display: block;
+}
+.semantic-container > .semantic-controls {
+    display: none;
+}
+
+.semantic-delete:hover{
+    background-color: #000;
+    color: #fff;
+}
+.semantic-settings:hover{
+    color: #000;
+}
+
+.semantic-controls button {
+    outline: 0;
+    border: 0;
+    background: #F5F5F5;
+    margin: 0;
+    padding: 0;
+    color: #888;
+    width: 15px;
+}
+
+.semantic-controls-top {
+    position: absolute;
+    z-index: 2; /* otherwise sometimes it isn't fully clickable (e.g. in equations) */
+    top: 0;
+    right: 17px; /* put right next to .semantic-controls */
+    white-space: nowrap;
+    display: none;
+    font-size: 11px;
+    padding: 1px 6px;
+    background-color: #fff;
+}
+
+.semantic-controls-top a {
+    color: #666666 !important;
+    cursor: pointer;
+}
+
+.semantic-controls-top .icon-copy{
+    font-size: 12px; /* at least in my browser the icon messed up when displayed at 11px */
+}
+
+.semantic-container.focused > .semantic-controls-top {
+    display: block;
+}
+
+.aloha-oer-block {
+  padding: 20px 10px 5px 20px;
+  margin: 0 30px 0 30px;
+  border: 1px solid #333;
+  border-top-color: #ccc;
+  border-left-color: #ccc;
+}
+
+/* Put a bullet/square before the element label/type.  Include "li *" (dropdown code) so that the check mark shares styling ... specifics will be overriden later */
+.aloha-oer-block .type:before , .aloha-oer-block .type-container li *:before{
+    content: "\25A0";
+    vertical-align: top;
+    font-size: .9em;
+    display: inline-block;
+    /* The following helps to account for size/weight differences of other marks (arrow, checkmark) without things jumping around so much */
+    width: 11px;
+}
+
+.focused .aloha-oer-block .dropdown .type:before {
+    /* Change to arrow when hovering block */
+    content: "\25BE";
+    /* Make adjustments so that arrow feels like same size/positioning as square */
+    font-size: 1.1em;
+    margin-left: -1px;
+    margin-right: 1px;
+}
+
+.semantic-container .type-container {
+    margin-bottom: 10px;
+    position: relative;
+    padding: 5px 10px;
+    display: inline;
+}
+
+.aloha-oer-block .type , .aloha-oer-block .type-container li *{
+    font-weight: bold;
+    color: #369 !important; /* Important if * is an <a> due to ID-based declaration in oerpub-content.less */
+    text-decoration: none;
+}
+
+.aloha-oer-block .type-container ul.dropdown-menu {
+    /* Put the dropdown exactly on top of current type (-1px for the dropdown's borders) */
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    margin: 0;
+    padding: 0;
+}
+
+.aloha-oer-block .type-container li *{
+    padding: 5px 10px;
+    line-height: normal;
+    display: block;
+    cursor: pointer;
+}
+.aloha-oer-block .type-container li *:hover{
+    color: #ffffff !important; /* Important if * is an <a> due to ID-based declaration in oerpub-content.less */
+    background-color: #0081c2;
+    background-image: -moz-linear-gradient(top, #0088cc, #0077b3);
+    background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#0088cc), to(#0077b3));
+    background-image: -webkit-linear-gradient(top, #0088cc, #0077b3);
+    background-image: -o-linear-gradient(top, #0088cc, #0077b3);
+    background-image: linear-gradient(to bottom, #0088cc, #0077b3);
+    background-repeat: repeat-x;
+    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#ff0088cc', endColorstr='#ff0077b3', GradientType=0);
+}
+.aloha-oer-block .type-container li *:before {
+    content: ""; /* nothing if not the selected one */
+}
+.aloha-oer-block .type-container li.checked *:before {
+    content: "\2713"; /* checkmark if the selected one */
+    margin-left: -4px;
+    margin-right: 4px;
+    font-size: 1em;
+}
+.aloha-oer-block .title {
+    font-size: 1em;
+}
+.aloha-oer-block .title:not(:empty),
+.aloha-oer-block .title:focus {
+    font-weight: bold;
+}
+
+/* ========== note ========== */
+.semantic-drag-source > * > * {
+    display: none;
+}
+.semantic-drag-source > *:hover {
+    background: #DDD;
+}
+.semantic-drag-source > * {
+    margin: 5px 0;
+    padding: 4px 0 4px 10px;
+    border: 1px solid #999;
+    min-height: 0 !important;
+    width: 155px;
+    border-radius: 7px;
+    background: #EEE;
+    cursor: -moz-grab !important;
+    cursor: -webkit-grab !important;
+    cursor: url('plugins/oer/semanticblock/css/openhand.cur'), default;
+}
+
+.semantic-drag-helper {
+    border-radius: 5px;
+    margin: 10px;
+    padding: 4px 20px 4px 20px;
+    background: white;
+    border: 1px solid black;
+    width: 300px;
+    height: 50px;
+    max-width: 300px;
+    max-height: 50px;
+    cursor: -moz-grabbing !important;
+    cursor: -webkit-grabbing !important;
+    cursor: url('plugins/oer/semanticblock/css/closedhand.cur'), default;
+}
+
+.semantic-drag-helper .title,
+.semantic-drag-helper .body {
+    display: inline;
+}
+.semantic-drag-helper .title:before {
+    content: "\25A0";
+    margin-right: 3px;
+}
+.semantic-drag-helper .title:after {
+    content: ":";
+    margin-right: 10px;
+}
+.semantic-drag-helper .title {
+    text-transform: capitalize;
+    font-weight: bold;
+    color: #369;
+}
+
+.aloha-oer-ephemera-if-empty:empty {
+    height: 1px;
+}
+
+.aloha-oer-block .aloha-editable {
+    min-height: 20px;
+}
+.image-options {
+    background-color: #F1F6FA;
+    background-position: center top;
+    background-repeat: no-repeat;
+    border: 2px dashed #999999;
+    margin: 0.5em 0;
+    padding: 5px;
+    position: relative;
+    text-align: center;
+    height: 175px;
+    overflow: hidden;
+}
+
+figure.aloha-oer-block img {
+    max-width: none;
+}
+
+.image-options .placeholder.preview img {
+    max-height: 156px;
+}
+
+.source-selection-allowed {
+    margin: 5px 0 5px 20px;
+}
+.source-selection-allowed input[type="text"] {
+    width: 500px;
+}
+
+form.plugin.image textarea {
+    width: 99%;
+    padding: 0.25em;
+}
+
+form.plugin.image .upload-url-input {
+    width: 400px;
+    display: block;
+    margin: 10px auto;
+}
+
+form#linkModal:focus {
+    outline: none;
+}
+
+figure.aloha-oer-block {
+    display: block;
+    border: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0 32px 0 15px !important; /* !important in order to override ID-based selector from oerpub-content.less */
+}
+
+figure.aloha-oer-block > .title,
+figure.aloha-oer-block > figcaption {
+    display: block;
+    text-align: center
+}
+
+figure.aloha-oer-block .image-wrapper {
+    position: relative;
+    display: block;
+    margin: 0 auto;
+    overflow-x: auto;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    word-wrap: break-word;
+    line-height: 16px;
+    z-index: 400;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit:hover {
+  cursor: pointer;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit:not(.passive):hover {
+  border: 1px dotted #1B86D2;
+  background-color: #D9E7F1;
+  word-wrap: break-word;
+  width: 20em;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit .warning-text{
+  color: #fff;
+  text-shadow: 1px 1px 3px #000;
+  font-style: italic;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit:hover .warning-text{
+  color: black;
+  font-style: normal;
+  text-shadow: none;
+  background-color: transparent;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit.passive {
+    display: none;
+    left: 0;
+    border-top-left-radius: 0;
+    background-color: #fff;
+}
+
+figure.aloha-oer-block .image-wrapper .image-edit.thank-you{
+    background-color: #C5DAE9;
+    border: 1px solid #1B86D2;
+    left: 0;
+}
+
+.semantic-container.focused > figure.aloha-oer-block > .image-wrapper > .image-edit {
+    display: block;
+}
+
+i.fa.fa-warning {
+  color: #dd3;
+  vertical-align: bottom;
+}
+/* These are from bootstrap.css so the title/figcaption _looks_ like an input box */
+.title, figcaption {
+  margin: 1px;
+  min-height: 20px;
+}
+
+.title::hover, figcaption::hover {
+  margin: 0;
+  border: 1px solid #cccccc;
+}
+
+.title.focus, figcaption.focus {
+  margin: 0;
+  background-color: #ffffff;
+  border: 1px solid #cccccc;
+  -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+     -moz-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+          box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+  -webkit-transition: border linear 0.2s, box-shadow linear 0.2s;
+     -moz-transition: border linear 0.2s, box-shadow linear 0.2s;
+       -o-transition: border linear 0.2s, box-shadow linear 0.2s;
+          transition: border linear 0.2s, box-shadow linear 0.2s;
+
+
+    border-color: rgba(82,168,236,.8);
+    outline: 0;
+    outline: thin dotted \9; /* IE6-9 */
+  -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+     -moz-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+          box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+}
+
+.title.empty, figcaption.empty {
+  color: #ccc;
+  cursor: pointer;
+}
+.title.empty::before {
+  content: "Insert Title Here";
+}
+
+figcaption.empty::before {
+  content: "Insert Caption Here";
+}/* Rely on MathJax HTML+CSS output but keep the MathML in the DOM (hidden) so it gets serialized */
+math,
+.MathJax .math .annotation {
+  display: none;
+}
+
+/*
+ The math editor uses MathJax to render the math but keeps the MathML in the DOM (for saving).
+ The MathJax is discarded by ephemera when saving and the (hidden via display:none) MathML is kept.
+
+ Chromium is slowly adding support for rendering MathML natively but ignores the display:none
+ so the MathML is wrapped in a span and then hidden here
+ */
+.mathml-wrapper {
+  display: none;
+}
+
+
+.math-element,
+.math-element * {
+  cursor: pointer;
+  -webkit-user-modify: read-only;
+     -moz-user-modift: read-only;
+}
+
+.math-element {
+  display: inline-block;
+  position: relative;
+}
+
+.math-element:hover {
+  background-color: #E5EEF5;
+}
+
+.math-popover {
+    min-width: 45em;
+}
+
+.math-popover textarea.formula {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.math-popover .math-container {
+    position: relative;
+    margin-bottom: 1em;
+}
+
+.math-popover .math-container textarea,
+.math-popover .math-container pre {
+  margin: 0;
+  padding: 5px;
+  outline: 0;
+  border: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 100%;
+  font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+
+.math-popover .math-container textarea {
+  /* Hide any scrollbars */
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  /* Remove WebKit user-resize widget */
+  resize: none;
+}
+
+.math-popover .math-container pre {
+  display: block;
+  visibility: hidden;
+}
+
+.math-element math annotation {
+    display: none;
+}
+
+.math-element-destroy {
+    display: none;
+    position: absolute;
+    right: -16px;
+    width: 16px;
+    top: -1px;
+    height: 16px;
+    background-image: url(plugins/oer/math/img/remove-01.png);
+    background-repeat: no-repeat;
+    background-position: right top;
+    cursor: pointer;
+}
+
+.math-element:hover .math-element-destroy {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.math-element .math-element-destroy:hover {
+    background-image: url(plugins/oer/math/img/remove-02.png);
+}
+
+button.done, button.copy {
+    float: right;
+}
+.semantic-drag-source .note:before {
+    content: "Note to reader";
+}
+
+.note .body {
+  margin: 10px;
+  background-color: inherit;
+}
+.semantic-drag-source dl.definition:before {
+    content: "Definition";
+}
+
+dl.definition.aloha-oer-block {
+    display: block;
+}
+dl.definition.aloha-oer-block {
+  padding: 0;
+  margin: 0 0 0 10px;
+  border: 0;
+}
+
+.aloha-oer-block.definition .term-wrapper:before {
+    content: "\25A0  Definition";
+    font-weight: bold;
+    margin: 5px 10px 0 5px;
+    color: #369;
+    display: inline-block;
+}
+.aloha-oer-block.definition .term {
+    display: inline-block;
+}
+.aloha-oer-block.definition .term:not(:empty) {
+    font-weight: bold;
+}
+dl.definition .body {
+  margin: 10px 0 10px 25px;
+}
+.semantic-drag-source .equation:before {
+    content: "Numbered Equation";
+}
+
+body { counter-reset: equation; }
+
+.aloha-oer-block.equation {
+    counter-increment: equation;
+    text-align: center;
+    border: 0;
+    padding: 10px 0 0;
+    margin: 0 !important; /* !important done to override ID-based selector in oerpub-content.less */
+}
+.aloha-oer-block.equation:after {
+    content: '(' counter(equation) ')';
+    float: right;
+    margin-right: 20px;
+}
+
+.aloha-oer-block.equation p {
+    display: inline;
+    cursor: pointer;
+}
+.semantic-drag-source .example:before {
+    content: "Activity";
+}
+
+.example.aloha-oer-block {
+    border-left: 0;
+    border-right: 0;
+    border-top: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+    margin: 0 25px 0 10px;
+}
+
+.example.aloha-oer-block, 
+.example .semantic-controls-top, 
+.example .exercise > .solution-controls > span, 
+.example .multipart > .exercise-controls > span, 
+.example .multipart > .solution-controls > span {
+    background-color: #f3f3f3;
+}
+
+.example .body {
+  margin: 10px;
+}
+.math-container {
+    width: 85%;
+}
+
+.math-editor-dialog .math-help-link {
+    float: right;
+}
+
+.math-editor-dialog .cheatsheet-label {
+    margin-left: 10px;
+}
+
+.math-editor-help-text {
+    max-width: 45%;
+}
+
+.math-editor-help-text-inner {
+    position: relative;
+}
+
+.math-editor-help-text-close {
+    display: inline-block;
+    background-image: url(plugins/oer/mathcheatsheet/img/remove-01.png);
+    background-repeat: no-repeat;
+    background-position: right top;
+    position: absolute;
+    right: -16px;
+    width: 16px;
+    top: -1px;
+    height: 16px;
+    margin-right: 1em;
+}
+
+#math-cheatsheet {
+    position: fixed;
+    bottom: 0;
+    color: #DDDDDD;
+    z-index: 1015;
+    width: 100%;
+}
+
+#math-cheatsheet .cheatsheet {
+    display: none;
+    background-color: #444444;
+    border-top: 1px solid black;
+    box-shadow: -10px 0 10px #BBBBBB;
+    padding: 0.5em 1em 1em;
+}
+
+#math-cheatsheet .cheatsheet-open {
+    display: none;
+    background-color: #444444;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    cursor: pointer;
+    float: right;
+    padding: 0 0.75em;
+    margin: 0 0.25em;
+}
+
+#math-cheatsheet .cheatsheet-close {
+    cursor: pointer;
+    float: right;
+}
+
+#math-cheatsheet .cheatsheet-type {
+    float: left;
+    margin-right: 1em;
+    white-space: nowrap;
+}
+
+#math-cheatsheet .cheatsheet-type label {
+    font-weight: normal;
+    display: inline;
+}
+
+#math-cheatsheet .cheatsheet-title {
+    margin-bottom: 0.75em;
+}
+
+#math-cheatsheet .cheatsheet-values {
+    background-color: #FFFFFF;
+    color: #000000;
+    overflow-x: auto;
+}
+
+#math-cheatsheet .cheatsheet-latex {
+    display: none;
+}
+
+#math-cheatsheet .cheatsheet-values table {
+    border-collapse: collapse;
+    border-width: 0;
+    font-family: courier new,courier;
+}
+
+#math-cheatsheet .cheatsheet-values td {
+    border-bottom: 1px solid #CCCCCC;
+    border-right: 1px solid #444444;
+    border-width: 0 1px 1px 0;
+    text-align: center;
+    white-space: nowrap;
+}
+.semantic-drag-source .quote:before {
+    font-style: normal;
+    content: "Quotation";
+}
+.quote.aloha-oer-block {
+    background-color: inherit;
+    margin: 10px 32px 10px 15px !important;
+    padding: 0 25px;
+    border: 0;
+    position: relative;
+    background: url(plugins/oer/quotation/img/quote-left.png) no-repeat 0 2px, url(plugins/oer/quotation/img/quote-right.png) no-repeat right 2px;
+}
