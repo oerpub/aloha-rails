@@ -9,8 +9,9 @@
  * compiled file, but it's generally better to create a new file per style scope.
  *
  *= require_self
+ *= require font-awesome
  *= require aloha
  *= require cnx-aloha
- *= require oerpub-editbar
+ *= require cnx-editbar
  *= require_tree .
  */

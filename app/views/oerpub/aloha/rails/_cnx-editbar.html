@@ -55,7 +55,7 @@
 
       <div class="btn-group">
         <button type="button" title="Image" class="action insertImage-oer  btn btn-plain navbar-btn"><span class="fa fa-file-image-o"></span></button>
-        <!-- <button type="button" class="action table  btn btn-plain navbar-btn"><span class="glyphicon glyphicon-align-justify"></span></button> -->
+        <button type="button" class="action createTable  btn btn-plain navbar-btn"><span class="fa fa-table"></span></button>
         <button type="button" title="Math" class="action insertMath   btn btn-plain navbar-btn">x+y<sup>2</sup></button>
       </div>
 
@@ -68,6 +68,8 @@
         {{#if changed}}
           <button type="button" class="revert  btn btn-plain navbar-btn">Revert</button>
           <button type="button" title="Save" class="save    btn btn-default navbar-btn"><i class="fa fa-save"></i> Save Draft</button>
+        {{else}}
+          <button type="button" class="publish btn btn-primary navbar-btn">Publish...</button>
         {{/if}}
       </div>
     </div><!-- /.navbar-collapse -->
@@ -83,6 +85,10 @@
           </div>
           <div class="example" data-type="activity">
               <div class="title"></div>
+          </div>
+
+          <div class="exercise">
+              <div class="problem"></div>
           </div>
 
           <blockquote class="quote">

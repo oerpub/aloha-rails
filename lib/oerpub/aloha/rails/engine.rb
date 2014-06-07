@@ -1,3 +1,6 @@
+require 'jquery-rails'
+require 'font-awesome-rails'
+
 module Oerpub
   module Aloha
     module Rails
