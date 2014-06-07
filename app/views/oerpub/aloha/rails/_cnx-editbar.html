@@ -65,16 +65,17 @@
       </div>
 
       <div class="navbar-right">
-        {{#if changed}}
+        <div id="cnx-save-revert" style="display:none;">
           <button type="button" class="revert  btn btn-plain navbar-btn">Revert</button>
           <button type="button" title="Save" class="save    btn btn-default navbar-btn"><i class="fa fa-save"></i> Save Draft</button>
-        {{else}}
+        </div>
+        <div id="cnx-publish">
           <button type="button" class="publish btn btn-primary navbar-btn">Publish...</button>
-        {{/if}}
+        </div>
       </div>
     </div><!-- /.navbar-collapse -->
 
-
+    <% if false %>
     <div class="navbar-collapse collapse toolbar" id="semantic-toolbar" role="toolbar">
       <span>Drag to add a new...</span>
 
@@ -87,10 +88,6 @@
               <div class="title"></div>
           </div>
 
-          <div class="exercise">
-              <div class="problem"></div>
-          </div>
-
           <blockquote class="quote">
           </blockquote>
 
@@ -99,7 +96,8 @@
 
           <dl class="definition"><dt></dt><dd></dd></dl>
       </span>
-
+    </div>
+    <% end %>
 
   </div><!-- /.container-fluid -->
 </nav>

@@ -3,9 +3,8 @@ module Oerpub
     module Rails
       module View
 
-        def oerpub_aloha(selector)
-          render :partial => 'oerpub/aloha/rails/embed',
-                 :locals => { :selector => selector }
+        def aloha_rails_editbar
+          render :partial => 'oerpub/aloha/rails/cnx-editbar'
         end
 
       end
