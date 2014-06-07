@@ -411,6 +411,11 @@ div.copy-section-controls span.copy-section:hover {
 figure {
   text-align: center;
   overflow: auto;
+  display: inline-block;
+}
+
+figure.aloha-oer-block {
+  counter-increment: figure;
 }
 
 .semantic-container:hover figure div.title:not(:focus):empty:before {
@@ -438,7 +443,10 @@ figure.aloha-oer-block > figcaption {
     display: block;
     text-align: center
 }
-
+figure figcaption::before {
+  content: "Figure " counter(figure) " ";
+  font-weight: bold;
+}
 .image-options {
     background-color: #F1F6FA;
     background-position: center top;
@@ -453,7 +461,29 @@ figure.aloha-oer-block > figcaption {
 }
 
 figure.aloha-oer-block img {
-    max-width: none;
+  max-width: none;
+  position: relative;
+}
+
+figure .add-figure-left,
+figure .add-figure-right {
+  top: 45%;
+  float: left;
+  position: absolute;
+  font-size: 40px;
+  color: #428bca;
+  display: none;
+  cursor: pointer;
+} 
+figure .add-figure-left {
+  left: 20px;
+} 
+figure .add-figure-right {
+  right: 20px;
+} 
+figure:hover .add-figure-left,
+figure:hover .add-figure-right {
+  display: inline;
 }
 
 .image-options .placeholder.preview img {
@@ -487,6 +517,23 @@ figure.aloha-oer-block .image-wrapper {
     display: inline-block;
     margin: 0 auto;
     overflow-x: auto;
+}
+
+figure.aloha-oer-block figure .image-wrapper:hover img {
+  opacity: 0.3; 
+}
+
+figure.aloha-oer-block .image-remove {
+  position: absolute;
+  cursor: pointer;
+  top: calc(50% - 25px);
+  left: calc(50% - 25px);
+  font-size: 50px;
+  display: none;
+}
+
+figure.aloha-oer-block figure .image-wrapper:hover .image-remove {
+  display: block;
 }
 
 figure.aloha-oer-block .image-wrapper .image-edit {
@@ -822,7 +869,6 @@ body { counter-reset: equation; }
 
 .math-editor-help-text-close {
     display: inline-block;
-    /*background-image: url(plugins/oer/mathcheatsheet/img/remove-01.png);*/
     background-repeat: no-repeat;
     background-position: right top;
     position: absolute;
@@ -987,4 +1033,177 @@ body { counter-reset: equation; }
     border: 0;
     position: relative;
     background: url(plugins/oer/quotation/img/quote-left.png) no-repeat 0 2px, url(plugins/oer/quotation/img/quote-right.png) no-repeat right 2px;
+}
+.aloha-editable .table {
+  margin: 1em 0 0 !important; /* !important in order to override ID-based selector in oerpub-content.less */
+}
+
+.aloha-editable table {
+    table-layout: fixed;
+    width: 96% !important; /* !important to override ID-based selector in oerpub-content.less */
+    margin: 0 1em !important; /* !important to override ID-based selector in oerpub-content.less */
+    border-top: 1px solid #666666;
+    border-left: 1px solid #666666;
+    border-collapse: collapse;
+}
+
+.aloha-editable table td, .aloha-editable table th {
+    border-bottom: 1px solid #666666;
+    border-right: 1px solid #666666;
+    height: 2em;
+}
+
+.aloha-editable table caption {
+    padding-top: 0.25em;
+    text-align: left;
+    caption-side: bottom;
+    color: #336699;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.aloha-editable th {
+    background-color: #F3F3F3;
+    text-align: left;
+}
+
+/* create dialog */
+.aloha-table-createdialog {
+	z-index: 99999;
+	position: absolute;
+	background-color: #F0F0F0;
+	border: 1px solid #cccccc;
+	-moz-border-radius: 2px;
+	-webkit-border-radius: 2px;
+	border-radius: 2px;
+    padding: 0.5em;
+}
+.aloha-table-createdialog table {
+	padding: 0px;
+	margin: 0px;
+    border-collapse: collapse;
+    border-top: 1px solid black;
+    border-left: 1px solid black;
+}
+.aloha-table-createdialog table td {
+	margin: 0px;
+	padding: 0px;
+	border: 1px solid #AFAFAF;
+	font-size: 8px;
+	width: 25px;
+	height: 25px;
+}
+.aloha-table-createdialog table td.hover {
+	background-color: #1c94c4;
+}
+.aloha-table-createdialog .table-size-info {
+	text-align: center;
+	font-size: 0.8em;
+}
+
+.aloha-table-createdialog table td.header {
+    background-color: #AAAAAA !important;
+	border: 1px solid black;
+}
+.aloha-table-createdialog input[type=checkbox] {
+    vertical-align: middle;
+    margin: 0;
+}
+.aloha-table-createdialog label {
+    display: inline;
+    margin: 0.25em;
+}
+
+.aloha-editable .add-row-before {
+  border-top: 1.5em solid #C5DAE9;
+}
+.aloha-editable .add-row-after {
+  border-bottom: 1.5em solid #C5DAE9;
+}
+.aloha-editable th.add-column-before,
+.aloha-editable td.add-column-before {
+  border-left: 2em solid #C5DAE9 !important;
+}
+.aloha-editable th.add-column-after,
+.aloha-editable td.add-column-after {
+  border-right: 2em solid #C5DAE9 !important;
+}
+.aloha-editable td.aloha-current-cell,
+.aloha-editable th.aloha-current-cell {
+    background-image: url("plugins/oer/table/img/currentcell.png") !important;
+    background-color: #E5EEF5;
+}
+.aloha-editable tr.delete-row td,
+.aloha-editable tr.delete-row th {
+    background-image: url("plugins/oer/table/img/remove.png") !important;
+    color: #bbb;
+}
+.aloha-editable td.delete-column,
+.aloha-editable th.delete-column {
+    color: #bbb;
+    background-image: url("plugins/oer/table/img/remove.png") !important;
+}
+.aloha-editable table.delete-table td,
+.aloha-editable table.delete-table th {
+    background-image: url("plugins/oer/table/img/remove.png") !important;
+    color: #bbb;
+}
+
+.aloha-root-editable {
+    counter-reset: table;
+}
+
+.aloha-editable table {
+    counter-increment: table;
+}
+
+.aloha-editable table:after {
+    content: "Table " counter(table);
+    display: table-caption;
+    caption-side: bottom;
+    text-align: left;
+    padding-top: 0.25em;
+    text-align: left;
+    color: #336699;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.table-placeholder {
+    display: block;
+    opacity: 0.35;
+    background: url(plugins/oer/table/img/insert-here-arrow.png) no-repeat;
+    width: 28px;
+    height: 30px;
+    margin-left: -14px;
+    margin-top: -10px;
+}
+
+#mediaEmbedDialog input[type=text],
+#mediaConfirmEmbedDialog input[type=text] {
+  margin-bottom: 0px;
+}
+#mediaEmbedDialog label,
+#mediaConfirmEmbedDialog label {
+  margin-bottom: 0px;
+  margin-top: 5px;
+}
+
+#mediaConfirmEmbedDialog .embed-preview {
+  text-align: center;
+}
+#mediaConfirmEmbedDialog form {
+  margin-top: 5px;
+  margin-bottom: 0px;
+}
+#mediaConfirmEmbedDialog textarea {
+  width: 95%;
+  margin-bottom: 0px;
+}
+
+
+.noembed-meta-info {
+  display: none;
 }

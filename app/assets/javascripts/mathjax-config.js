@@ -9,8 +9,9 @@
   }
 
   this.MathJax.Hub.Config({
-    jax: ['input/MathML', 'input/TeX', 'input/AsciiMath', 'output/NativeMML', 'output/HTML-CSS'],
-    extensions: ['asciimath2jax.js', 'tex2jax.js', 'mml2jax.js', 'MathMenu.js', 'MathZoom.js'],
+    jax: ['input/MathML', 'input/TeX', 'input/AsciiMath', 'output/HTML-CSS', 'output/NativeMML'],
+    extensions: ['asciimath2jax.js', 'tex2jax.js', 'mml2jax.js',
+                 'MathMenu.js', 'MathZoom.js', 'toMathML.js'],
     tex2jax: {
       inlineMath: [['[TEX_START]', '[TEX_END]'], ['\\(', '\\)']]
     },
